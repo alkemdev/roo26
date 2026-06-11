@@ -904,7 +904,7 @@ $('#qrClose').addEventListener('click', () => {
 // Spotify account. Browser-only OAuth (PKCE) — no server secret. To enable:
 // paste your Spotify app's Client ID below (it's a public value) and register
 // the redirect URI shown in SPOTIFY_REDIRECT in the Spotify developer dashboard.
-const SPOTIFY_CLIENT_ID = '' // ← paste Client ID here to switch the feature on
+const SPOTIFY_CLIENT_ID = 'e2805ae7262048179ea0ff22f4824b95'
 const SPOTIFY_REDIRECT = `${location.origin}${BASE}/plan`
 const SPOTIFY_SCOPES = 'playlist-modify-private playlist-modify-public'
 
