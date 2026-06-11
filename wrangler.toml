@@ -1,0 +1,16 @@
+# Wrangler config for the Cloudflare Pages project.
+#
+# Used by `wrangler pages deploy` (CI + local) and `wrangler pages dev`.
+# Infrastructure (KV namespace, custom domain, DNS, analytics) is managed in
+# OpenTofu under infra/ — keep bindings there as the source of truth.
+name = "roo26"
+pages_build_output_dir = "./dist"
+compatibility_date = "2026-06-01"
+
+# Crew location sharing (optional). The namespace + binding are provisioned by
+# `infra/` when enable_crew = true and inherited by every deployment, so this
+# stays commented. Uncomment + fill the id only if you manage bindings here
+# instead of in OpenTofu.
+# [[kv_namespaces]]
+# binding = "ROO_KV"
+# id = "<roo26-crew namespace id>"

@@ -33,12 +33,35 @@ npm run preview
 routes (`/`, `/map`, `/plan`, `/trip`, `/info`); the app component and data live
 outside `srcDir` under `src/pages/roo26/` and are imported, not routed.
 
-## Deploy (Cloudflare Pages)
+## Deploy & infrastructure
 
-- Build command `npm run build`, output directory `dist`.
-- Add `roo26.alkem.dev` as a custom domain (alkem.dev zone, automatic DNS + cert).
-- Optional crew sharing: create a KV namespace and bind it as `ROO_KV` in
-  Settings → Bindings. No code change needed.
+Two layers, both as code:
+
+- **Infra — OpenTofu (`infra/`).** Declares the Cloudflare Pages project,
+  custom domain + DNS record, optional `ROO_KV` namespace/binding, and cookieless
+  Web Analytics. Run `tofu apply` once (and on infra changes). See
+  [`infra/README.md`](infra/README.md) for the required API token scopes and the
+  account/zone IDs you supply.
+- **Deploy — GitHub Actions (`.github/workflows/deploy.yml`).** On every push to
+  `main` it builds and uploads to Cloudflare Pages (production); on PRs it ships a
+  preview deployment. Project name and output dir come from `wrangler.toml`.
+
+### One-time setup
+
+1. `cd infra && tofu init && tofu apply` (provisions the project, domain, DNS,
+   analytics). This must run before the first CI deploy so the project exists.
+2. Add two repository secrets (Settings → Secrets and variables → Actions):
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+3. Push to `main` — CI builds and deploys automatically.
+
+Manual deploy if you ever need it: `npm run build && npx wrangler pages deploy`.
+
+Crew sharing is off by default; set `enable_crew = true` in `infra/` to create
+and bind `ROO_KV`, and the crew UI lights up once `/roo26-api/health` returns
+`{ok:true}`. No code change required.
+
+Edge response headers (asset caching, SW revalidation, baseline security) live in
+[`public/_headers`](public/_headers).
 
 ## Invariants — do not break
 
