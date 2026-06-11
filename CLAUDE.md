@@ -16,11 +16,18 @@ schedule, interactive Leaflet map, personal planner with shareable links/QR,
 passive trip tracking, NWS weather/alerts, offline PWA, and easter eggs. See
 `README.md` for the file layout.
 
+## Deploy — Cloudflare Workers
+- Deploys on **Cloudflare Workers** (Static Assets + `@astrojs/cloudflare`), via
+  Workers Builds on push to `main`. Config-as-code in `wrangler.jsonc`.
+- `npm run build` → `dist/client` (assets) + `dist/server` (Worker). Verify the
+  Worker locally with `npx wrangler dev` (test routes + `/roo26-api/health`).
+
 ## Build & verify
-- `npm run build` → `dist/` (5 static routes: `/`, `/map`, `/plan`, `/trip`, `/info`).
+- 5 routes: `/`, `/map`, `/plan`, `/trip`, `/info` (clean no-slash URLs).
 - App component: `src/pages/roo26/_App.astro` (UI + CSS) + `_app.js` (all logic) +
   `_data/*.json`. Route wrappers in `src-roo26/pages/`. Static assets in `public/`.
-- Optional crew backend: `functions/roo26-api/[[path]].js` (needs KV `ROO_KV`).
+- Crew backend: `src-roo26/pages/roo26-api/[...path].ts` (on-demand Worker route,
+  `prerender = false`; needs KV `ROO_KV` bound in `wrangler.jsonc`).
 
 ## Invariants — don't break (details in README.md)
 - localStorage keys, the `#p=2!…` share-link format, set IDs `${day}-${stage}-${slug}`,

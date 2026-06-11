@@ -21,9 +21,8 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
-# opentofu / terraform (commit .terraform.lock.hcl for reproducible providers)
-infra/.terraform/
-*.tfstate
-*.tfstate.*
-infra/terraform.tfvars
-crash.log
+# cloudflare workers / wrangler
+.wrangler/
+.dev.vars
+.dev.vars.*
+worker-configuration.d.ts

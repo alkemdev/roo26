@@ -27,49 +27,43 @@ npm run preview
 | `src/pages/roo26/_data/*.json` | `schedule.json` (116 sets), `pois.json` (49 map POIs), `artists.json` (115 artists). |
 | `src-roo26/pages/{index,map,plan,trip,info}.astro` | Root-path route wrappers — each renders `<App tab="…" standalone />`. |
 | `public/roo26-*` | Service worker, web manifests, icons, official festival maps. Filenames are referenced by absolute path in code — do not rename. |
-| `functions/roo26-api/[[path]].js` | Optional Cloudflare Pages Function for crew location sharing. Inert until a KV namespace is bound as `ROO_KV`; the client feature-detects via `/roo26-api/health` and hides the crew UI when absent. |
+| `public/_headers` | Edge headers (immutable caching for `/_astro/*`, no-cache SW, baseline security). Honored by Workers Static Assets. |
+| `src-roo26/pages/roo26-api/[...path].ts` | On-demand Worker route for crew location sharing (`prerender = false`). Inert until a KV namespace is bound as `ROO_KV` in `wrangler.jsonc`; the client feature-detects via `/roo26-api/health` and hides the crew UI when absent. |
+| `wrangler.jsonc` | Cloudflare Workers config (Static Assets + `@astrojs/cloudflare`). |
 
 `astro.config.ts` sets `srcDir: './src-roo26'` so the wrappers become the
 routes (`/`, `/map`, `/plan`, `/trip`, `/info`); the app component and data live
 outside `srcDir` under `src/pages/roo26/` and are imported, not routed.
 
-## Deploy & infrastructure
+## Deploy — Cloudflare Workers
 
-Deploys run through **Cloudflare Pages' native Git integration** — Cloudflare
-clones this repo and runs the build itself on every push to `main`. No GitHub
-Actions deploy step. `roo26.alkem.dev` is the canonical URL (the standalone build
-emits absolute canonical/OG tags there) and the link to share everywhere.
+Deploys run on **Cloudflare Workers** (Static Assets + on-demand routes via the
+`@astrojs/cloudflare` adapter). Cloudflare's **Workers Builds** clones the repo
+and runs the build itself on every push to `main` — no GitHub Actions.
+`roo26.alkem.dev` is the canonical URL (the build emits absolute canonical/OG
+tags there) and the link to share everywhere.
+
+- **Build command:** `npm run build` → emits `dist/client` (assets) + `dist/server`
+  (the Worker). The adapter writes the deploy config to `dist/server/wrangler.json`.
+- **Deploy command:** `npx wrangler deploy` (Workers Builds default). The adapter's
+  redirected config wires the Worker + `dist/client` assets automatically.
+- **Bindings/config:** `wrangler.jsonc` (config-as-code). `html_handling:
+  drop-trailing-slash` gives clean no-slash URLs (`/map`, not `/map/`).
 
 ### One-time setup (Cloudflare dashboard)
 
-1. Workers & Pages → **Create → Pages → Connect to Git** → authorize GitHub →
-   pick `alkemdev/roo26`.
-2. Production branch `main`, **build command `npm run build`**, **output
-   directory `dist`** → Save and Deploy. (Node version is pinned by `.nvmrc`.)
-   Cloudflare auto-detects `functions/` and `wrangler.toml`.
-3. The project's **Custom domains** tab → add `roo26.alkem.dev` (same CF account
-   as the `alkem.dev` zone → DNS record + cert are created automatically).
+1. Workers & Pages → **Create → Import a repository** → `alkemdev/roo26`.
+2. **Production branch `main`**; build/deploy commands as above (auto-detected for
+   Astro). Node version from `.nvmrc`-equivalent / Workers default (22).
+3. The Worker's **Settings → Domains & Routes** → add `roo26.alkem.dev` (same CF
+   account as the `alkem.dev` zone → DNS + cert are automatic).
 
-After that, every push to `main` ships to production and every PR gets a preview
-URL — no further action.
+After that, every push to `main` ships to production. Local preview of the built
+Worker (incl. the crew route): `npx wrangler dev`.
 
-### Infrastructure as code (optional, `infra/`)
-
-OpenTofu mirrors the above as code — Pages project (with the Git build config),
-custom domain, DNS record, optional `ROO_KV`, and cookieless Web Analytics — so
-the setup is reproducible. Connecting GitHub to Pages needs a one-time dashboard
-OAuth; after that `tofu apply` can manage everything (or `tofu import` a
-dashboard-created project). See [`infra/README.md`](infra/README.md) for token
-scopes and the account/zone IDs you supply.
-
-Local preview of the built output (incl. Functions): `npx wrangler pages dev`.
-
-Crew sharing is off by default; set `enable_crew = true` in `infra/` to create
-and bind `ROO_KV`, and the crew UI lights up once `/roo26-api/health` returns
-`{ok:true}`. No code change required.
-
-Edge response headers (asset caching, SW revalidation, baseline security) live in
-[`public/_headers`](public/_headers).
+Crew sharing is off by default. Create a KV namespace, uncomment the
+`kv_namespaces` binding (`ROO_KV`) in `wrangler.jsonc`, and the crew UI lights up
+once `/roo26-api/health` returns `{ok:true}`. No code change required.
 
 ## Invariants — do not break
 

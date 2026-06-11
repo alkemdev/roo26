@@ -1,0 +1,23 @@
+{
+	// Cloudflare Workers config (Static Assets + @astrojs/cloudflare server).
+	// Deployed via Workers Builds on push to main; `wrangler dev` for local.
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "roo26",
+	"compatibility_date": "2026-06-11",
+	"compatibility_flags": ["global_fetch_strictly_public"],
+	"main": "@astrojs/cloudflare/entrypoints/server",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		// Serve /map directly and redirect /map/ → /map, so the canonical
+		// (no-trailing-slash) URLs match what's actually served.
+		"html_handling": "drop-trailing-slash"
+	},
+	"observability": {
+		"enabled": true
+	}
+	// Crew location sharing (optional): create a KV namespace and uncomment to
+	// bind it. The app feature-detects via /roo26-api/health and hides the crew
+	// UI when ROO_KV is absent, so this stays off until you want it.
+	// "kv_namespaces": [{ "binding": "ROO_KV", "id": "<roo26-crew namespace id>" }]
+}

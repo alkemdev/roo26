@@ -4,13 +4,13 @@
 // official festival maps are cached so the app + maps work with zero signal.
 // serves both cade.io/roo26 and the standalone roo26.alkem.dev
 const BASE = self.location.hostname.startsWith('roo26.') ? '' : '/roo26'
-const CACHE = 'roo26-v4'
+const CACHE = 'roo26-v5'
 const PRECACHE = [
 	BASE + '/',
-	BASE + '/map/',
-	BASE + '/plan/',
-	BASE + '/trip/',
-	BASE + '/info/',
+	BASE + '/map',
+	BASE + '/plan',
+	BASE + '/trip',
+	BASE + '/info',
 	'/roo26-map-centeroo.webp',
 	'/roo26-map-outeroo.webp',
 	'/roo26-icon-192.png',
