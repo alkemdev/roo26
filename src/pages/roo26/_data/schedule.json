@@ -12,7 +12,9 @@
     { "id": "this", "name": "This Tent", "color": "#3ddc97", "short": "THIS" },
     { "id": "that", "name": "That Tent", "color": "#46b3ff", "short": "THAT" },
     { "id": "other", "name": "The Other", "color": "#b08bff", "short": "OTHER" },
-    { "id": "where", "name": "Where Stage", "color": "#ff8bd2", "short": "WHERE" }
+    { "id": "where", "name": "Where Stage", "color": "#ff8bd2", "short": "WHERE" },
+    { "id": "when", "name": "When (Plaza 3)", "color": "#ffd166", "short": "WHEN" },
+    { "id": "silent", "name": "Silent Disco (Plaza 9)", "color": "#5ce1e6", "short": "SILENT" }
   ],
   "sets": [
     { "a": "Spiritual Cramp", "s": "what", "d": "thu", "t": "2026-06-11T17:30", "e": "2026-06-11T18:30" },
@@ -133,6 +135,13 @@
     { "a": "San Holo", "s": "other", "d": "sun", "t": "2026-06-14T16:15", "e": "2026-06-14T17:15" },
     { "a": "Big Gigantic", "s": "other", "d": "sun", "t": "2026-06-14T17:30", "e": "2026-06-14T18:30" },
     { "a": "Daily Bread", "s": "other", "d": "sun", "t": "2026-06-14T18:45", "e": "2026-06-14T19:45" },
-    { "a": "LSZEE", "s": "other", "d": "sun", "t": "2026-06-14T20:15", "e": "2026-06-14T21:30" }
+    { "a": "LSZEE", "s": "other", "d": "sun", "t": "2026-06-14T20:15", "e": "2026-06-14T21:30" },
+    { "a": "Heelturn & Madspinnz", "s": "silent", "d": "thu", "t": "2026-06-12T00:00", "e": "2026-06-12T04:00" },
+    { "a": "Route 69", "s": "when", "d": "thu", "t": "2026-06-12T03:00", "e": "2026-06-12T06:00" },
+    { "a": "Camhoncho x C'est Funk", "s": "silent", "d": "fri", "t": "2026-06-12T22:00", "e": "2026-06-13T02:00" },
+    { "a": "Motherborg", "s": "when", "d": "fri", "t": "2026-06-13T01:00", "e": "2026-06-13T05:00" },
+    { "a": "From Dusk Til Dawn", "s": "when", "d": "sat", "t": "2026-06-14T01:00", "e": "2026-06-14T05:00" },
+    { "a": "Boytoy x Jiminy Kick-It", "s": "silent", "d": "sun", "t": "2026-06-15T02:00", "e": "2026-06-15T05:00" },
+    { "a": "From Dusk Til Dawn", "s": "when", "d": "sun", "t": "2026-06-15T01:00", "e": "2026-06-15T05:00" }
   ]
 }

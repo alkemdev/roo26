@@ -73,7 +73,10 @@ const STAGES = Object.fromEntries(SCHED.stages.map((s) => [s.id, s]))
 // Festival area each stage lives in. The six main stages are all in Centeroo
 // for 2026. Outeroo has its own Plaza stages (WHY/WHEN/GROOP/SILENT DISCO/THE
 // GROVE) + Snake & Jake's — add them here as their sets get transcribed.
-const STAGE_AREA = { what: 'centeroo', which: 'centeroo', this: 'centeroo', that: 'centeroo', other: 'centeroo', where: 'centeroo' }
+const STAGE_AREA = {
+	what: 'centeroo', which: 'centeroo', this: 'centeroo', that: 'centeroo', other: 'centeroo', where: 'centeroo',
+	when: 'outeroo', silent: 'outeroo',
+}
 const SETS = SCHED.sets
 	.map((x, i) => {
 		const stage = STAGES[x.s] || { id: x.s, name: x.s, color: '#888', short: x.s }
