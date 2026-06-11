@@ -3,9 +3,12 @@
 // is served from the domain root via the wrapper pages in src-roo26/pages/.
 import { defineConfig } from 'astro/config'
 
+import cloudflare from '@astrojs/cloudflare';
+
 export default defineConfig({
-	site: 'https://roo26.alkem.dev',
-	srcDir: './src-roo26',
-	trailingSlash: 'never',
-	compressHTML: true,
+  site: 'https://roo26.alkem.dev',
+  srcDir: './src-roo26',
+  trailingSlash: 'never',
+  compressHTML: true,
+  adapter: cloudflare(),
 })
