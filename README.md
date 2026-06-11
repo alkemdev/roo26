@@ -35,26 +35,34 @@ outside `srcDir` under `src/pages/roo26/` and are imported, not routed.
 
 ## Deploy & infrastructure
 
-Two layers, both as code:
+Deploys run through **Cloudflare Pages' native Git integration** — Cloudflare
+clones this repo and runs the build itself on every push to `main`. No GitHub
+Actions deploy step. `roo26.alkem.dev` is the canonical URL (the standalone build
+emits absolute canonical/OG tags there) and the link to share everywhere.
 
-- **Infra — OpenTofu (`infra/`).** Declares the Cloudflare Pages project,
-  custom domain + DNS record, optional `ROO_KV` namespace/binding, and cookieless
-  Web Analytics. Run `tofu apply` once (and on infra changes). See
-  [`infra/README.md`](infra/README.md) for the required API token scopes and the
-  account/zone IDs you supply.
-- **Deploy — GitHub Actions (`.github/workflows/deploy.yml`).** On every push to
-  `main` it builds and uploads to Cloudflare Pages (production); on PRs it ships a
-  preview deployment. Project name and output dir come from `wrangler.toml`.
+### One-time setup (Cloudflare dashboard)
 
-### One-time setup
+1. Workers & Pages → **Create → Pages → Connect to Git** → authorize GitHub →
+   pick `alkemdev/roo26`.
+2. Production branch `main`, **build command `npm run build`**, **output
+   directory `dist`** → Save and Deploy. (Node version is pinned by `.nvmrc`.)
+   Cloudflare auto-detects `functions/` and `wrangler.toml`.
+3. The project's **Custom domains** tab → add `roo26.alkem.dev` (same CF account
+   as the `alkem.dev` zone → DNS record + cert are created automatically).
 
-1. `cd infra && tofu init && tofu apply` (provisions the project, domain, DNS,
-   analytics). This must run before the first CI deploy so the project exists.
-2. Add two repository secrets (Settings → Secrets and variables → Actions):
-   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-3. Push to `main` — CI builds and deploys automatically.
+After that, every push to `main` ships to production and every PR gets a preview
+URL — no further action.
 
-Manual deploy if you ever need it: `npm run build && npx wrangler pages deploy`.
+### Infrastructure as code (optional, `infra/`)
+
+OpenTofu mirrors the above as code — Pages project (with the Git build config),
+custom domain, DNS record, optional `ROO_KV`, and cookieless Web Analytics — so
+the setup is reproducible. Connecting GitHub to Pages needs a one-time dashboard
+OAuth; after that `tofu apply` can manage everything (or `tofu import` a
+dashboard-created project). See [`infra/README.md`](infra/README.md) for token
+scopes and the account/zone IDs you supply.
+
+Local preview of the built output (incl. Functions): `npx wrangler pages dev`.
 
 Crew sharing is off by default; set `enable_crew = true` in `infra/` to create
 and bind `ROO_KV`, and the crew UI lights up once `/roo26-api/health` returns

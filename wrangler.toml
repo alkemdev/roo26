@@ -1,8 +1,10 @@
 # Wrangler config for the Cloudflare Pages project.
 #
-# Used by `wrangler pages deploy` (CI + local) and `wrangler pages dev`.
-# Infrastructure (KV namespace, custom domain, DNS, analytics) is managed in
-# OpenTofu under infra/ — keep bindings there as the source of truth.
+# Deploys happen via Cloudflare's native Git integration (CF builds on every
+# push to main), so no GitHub Actions deploy is needed. This file is read by
+# the CF build system for output dir + compatibility date, and by
+# `wrangler pages dev` locally. Infrastructure (KV namespace, custom domain,
+# DNS, analytics) is managed in OpenTofu under infra/.
 name = "roo26"
 pages_build_output_dir = "./dist"
 compatibility_date = "2026-06-01"

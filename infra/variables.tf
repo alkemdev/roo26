@@ -26,6 +26,18 @@ variable "production_branch" {
   default     = "main"
 }
 
+variable "github_owner" {
+  description = "GitHub owner/org connected to the Pages project for native builds."
+  type        = string
+  default     = "alkemdev"
+}
+
+variable "github_repo" {
+  description = "GitHub repo name connected to the Pages project."
+  type        = string
+  default     = "roo26"
+}
+
 variable "domain" {
   description = "Custom domain served by the Pages project."
   type        = string

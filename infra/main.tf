@@ -1,10 +1,14 @@
 # Roo '26 — Cloudflare infrastructure as code (OpenTofu).
 #
-# Owns everything the app needs at the edge: the Pages project, the optional
-# crew-sharing KV namespace + binding, the custom domain, its DNS record, and
-# privacy-friendly Web Analytics. Asset uploads are done by the GitHub Actions
-# deploy workflow (`wrangler pages deploy`) — this is a direct-upload project,
-# so there is intentionally no `source` block wiring Cloudflare's own builder.
+# Owns everything the app needs at the edge: the Pages project (wired to this
+# GitHub repo so Cloudflare builds + deploys natively on every push to main),
+# the optional crew-sharing KV namespace + binding, the custom domain, its DNS
+# record, and privacy-friendly Web Analytics.
+#
+# Note: connecting GitHub to Cloudflare Pages requires a one-time OAuth
+# authorization in the dashboard. Once that's done for the account, this config
+# can create/manage the connected project; before it, do the first
+# Connect-to-Git in the dashboard and `tofu import` the project here.
 
 locals {
   # ROO_KV binding, attached to both prod and preview deploys when crew is on.
@@ -26,6 +30,24 @@ resource "cloudflare_pages_project" "roo26" {
   account_id        = var.cloudflare_account_id
   name              = var.project_name
   production_branch = var.production_branch
+
+  # Native Git integration: Cloudflare clones the repo and runs the build.
+  build_config = {
+    build_command   = "npm run build"
+    destination_dir = "dist"
+  }
+
+  source = {
+    type = "github"
+    config = {
+      owner                          = var.github_owner
+      repo_name                      = var.github_repo
+      production_branch              = var.production_branch
+      production_deployments_enabled = true
+      pr_comments_enabled            = true
+      preview_deployment_setting     = "all"
+    }
+  }
 
   deployment_configs = {
     production = {

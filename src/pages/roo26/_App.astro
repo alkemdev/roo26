@@ -18,6 +18,13 @@ const titles: Record<string, string> = {
 const title = titles[tab]
 const desc =
 	"Unofficial interactive guide to Bonnaroo 2026 (June 11–14, Manchester TN): full set times, live map with your location, water & medical stations, and a personal planner. Works great on your phone."
+
+// Canonical home is roo26.alkem.dev (Astro.site). The standalone build emits
+// absolute canonical/OG URLs there so shared links resolve to the subdomain;
+// the cade.io copy keeps its own absolute image.
+const canonical = standalone && Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined
+const ogImage =
+	standalone && Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : 'https://cade.io/roo26-icon-512.png'
 ---
 
 <!doctype html>
@@ -30,7 +37,9 @@ const desc =
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={desc} />
 		<meta property="og:type" content="website" />
-		<meta property="og:image" content="https://cade.io/roo26-icon-512.png" />
+		<meta property="og:image" content={ogImage} />
+		{canonical && <link rel="canonical" href={canonical} />}
+		{canonical && <meta property="og:url" content={canonical} />}
 		<meta name="theme-color" content="#120d1d" />
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

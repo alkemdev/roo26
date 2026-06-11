@@ -34,15 +34,11 @@ tofu plan
 tofu apply
 ```
 
-After apply, the first asset deploy comes from CI (push to `main`) or locally:
+Deploys themselves are handled by Cloudflare Pages' native Git integration
+(CF builds on every push to `main`), not by this config — `tofu apply` only
+provisions/maintains the project and its surrounding resources.
 
-```sh
-npm run build
-npx wrangler pages deploy dist --project-name roo26
-```
+## State
 
-## CI applies
-
-The GitHub Actions workflow only uploads assets; it does **not** run `tofu
-apply`. Run infra changes from your machine, or add an `infra` job gated on a
-remote backend (see `backend.tf`) if you want CI to own state too.
+State is local by default (gitignored). Run infra changes from your machine, or
+switch to the R2 remote backend in `backend.tf` if you want shared/CI state.
