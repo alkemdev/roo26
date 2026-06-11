@@ -165,8 +165,9 @@ if (state.favs == null) {
 }
 
 function currentFestDay() {
-	// "festival day" rolls over at 6 AM — a 1 AM set still belongs to the previous day
-	const now = Date.now() - 6 * 3600e3
+	// "festival day" rolls over at 8 AM — a 1 AM (or sunrise) set still belongs
+	// to the previous day; the tab only advances mid-morning
+	const now = Date.now() - 8 * 3600e3
 	for (const d of SCHED.days) {
 		if (now >= epoch(d.date + 'T00:00') && now < epoch(d.date + 'T23:59')) return d.id
 	}

@@ -74,5 +74,5 @@ once `/roo26-api/health` returns `{ok:true}`. No code change required.
 - **Set IDs** `${day}-${stageId}-${slug(artist)}`; `slug()` also keys
   `artists.json` — keep the two in lockstep.
 - **Times** are stored as local-CDT ISO without offset; epoch math appends
-  `-05:00`. The "festival day" rolls over at 6 AM. Don't introduce `Date`
+  `-05:00`. The "festival day" rolls over at 8 AM. Don't introduce `Date`
   timezone parsing.

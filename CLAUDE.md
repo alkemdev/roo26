@@ -31,5 +31,5 @@ passive trip tracking, NWS weather/alerts, offline PWA, and easter eggs. See
 
 ## Invariants — don't break (details in README.md)
 - localStorage keys, the `#p=2!…` share-link format, set IDs `${day}-${stage}-${slug}`,
-  and festival-time handling (CDT, 6 AM day rollover). Reordering `schedule.json`
+  and festival-time handling (CDT, 8 AM day rollover). Reordering `schedule.json`
   breaks old share links.
