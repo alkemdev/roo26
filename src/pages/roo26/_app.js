@@ -634,6 +634,12 @@ function renderPlan() {
 		for (let i = 0; i < daySets.length; i++) {
 			const s = daySets[i]
 			frag.append(setRow(s))
+			// friends (from imported plans) who are also going to this exact set
+			const fhere = state.friends.filter((f) => f.going.includes(s.id))
+			if (fhere.length)
+				frag.append(
+					el('div', { class: 'friends-at' }, '🤝 ', `${fhere.map((f) => f.name).join(', ')} here too`),
+				)
 			const next = daySets[i + 1]
 			if (next && s.endMs && next.startMs) {
 				if (next.startMs < s.endMs) {
@@ -790,78 +796,170 @@ function planText() {
 	return txt
 }
 
-// ── your display name: one editable username for links, QR codes & crew ──
+// ── your sharing identity: a name + an icon, used on links, QR & friend cards ──
+const NAME_EMOJIS = ['🦄', '🌈', '🍄', '🎸', '🛸', '🔥', '🌻', '🐸', '💀', '🪩', '🦖', '👽', '🌮', '🦋', '⚡', '✌️']
 const getMyName = () => store.get('myname', '')
-function editName() {
-	const next = (prompt('Your name — shown on your shared links, QR codes & to your crew:', getMyName()) || '').trim()
-	if (!next) return getMyName() // cancelled / blank: keep what we had
-	store.set('myname', next.slice(0, 24))
-	renderNameChip()
-	return getMyName()
+let myIcon = store.get('myicon', '')
+let pickIcon = ''
+// what friends actually see — icon + name (falls back to just the name)
+const myDisplayName = () => (myIcon ? myIcon + ' ' : '') + getMyName()
+
+// give everyone a fun, near-unique handle on first run (still fully editable).
+// ~20×20×900 ≈ 360k combos — collisions are unlikely across a campsite.
+const FUN_ADJ = ['Cosmic', 'Funky', 'Groovy', 'Disco', 'Electric', 'Velvet', 'Neon', 'Mystic', 'Sunny', 'Wild', 'Dazzling', 'Psychedelic', 'Rowdy', 'Mellow', 'Radiant', 'Glittery', 'Bouncy', 'Sparkly', 'Lunar', 'Sticky']
+const FUN_NOUN = ['Otter', 'Mango', 'Penguin', 'Comet', 'Mushroom', 'Unicorn', 'Wombat', 'Sunflower', 'Yeti', 'Narwhal', 'Possum', 'Firefly', 'Kazoo', 'Jellybean', 'Pickle', 'Cactus', 'Noodle', 'Wizard', 'Goblin', 'Llama']
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
+const funName = () => `${pick(FUN_ADJ)} ${pick(FUN_NOUN)} ${Math.floor(Math.random() * 900) + 100}`
+if (!getMyName()) {
+	store.set('myname', funName())
+	myIcon = pick(NAME_EMOJIS)
+	store.set('myicon', myIcon)
 }
+
+function renderNameEmojis() {
+	$('#nameEmojis').replaceChildren(
+		...NAME_EMOJIS.map((e) => {
+			const b = el('button', { class: 'pin-emoji' + (e === pickIcon ? ' active' : '') }, e)
+			b.addEventListener('click', () => {
+				pickIcon = pickIcon === e ? '' : e // tap again to clear
+				renderNameEmojis()
+			})
+			return b
+		}),
+	)
+}
+function openNameSheet() {
+	pickIcon = myIcon
+	renderNameEmojis()
+	$('#nameInput').value = getMyName()
+	$('#nameSheetWrap').hidden = false
+}
+$('#nameSave').addEventListener('click', () => {
+	const name = $('#nameInput').value.trim().slice(0, 24)
+	if (!name) return toast('Enter a name')
+	store.set('myname', name)
+	myIcon = pickIcon
+	store.set('myicon', myIcon)
+	$('#nameSheetWrap').hidden = true
+	renderNameChip()
+})
+$('#nameCancel').addEventListener('click', () => ($('#nameSheetWrap').hidden = true))
+$('#nameSheetWrap').addEventListener('click', (e) => {
+	if (e.target.id === 'nameSheetWrap') $('#nameSheetWrap').hidden = true
+})
+
 function renderNameChip() {
 	const chip = $('#nameChip')
 	if (!chip) return
-	const name = getMyName()
 	chip.replaceChildren(
-		name
-			? el('span', {}, 'Sharing as ', el('b', {}, name), ' · ', el('span', { class: 'name-edit' }, '✏️ edit'))
-			: el('span', { class: 'name-edit' }, '✏️ Set your name for sharing'),
+		getMyName()
+			? el('span', {}, 'Sharing as ', el('b', {}, myDisplayName()), ' · ', el('span', { class: 'name-edit' }, '✏️ edit'))
+			: el('span', { class: 'name-edit' }, '✏️ Set your name + icon for sharing'),
 	)
 }
-$('#nameChip').addEventListener('click', editName)
+$('#nameChip').addEventListener('click', openNameSheet)
 
-$('#sharePlan').addEventListener('click', async () => {
-	if (!Object.keys(state.favs).length) return toast('Star some sets first!')
-	const name = getMyName() || editName() || 'A friend'
-	const url = `${location.origin}${BASE}/plan#p=${encodePlan(name)}`
-	const txt = planText() + '\nOpen my full plan: ' + url
+// ── Share my Roo: one hub with a QR + text-a-friend buttons ──
+let shareUrl = ''
+// text/share helper — opens the native share sheet (text a friend) or copies
+async function shareText(text) {
 	try {
-		if (navigator.share) await navigator.share({ text: txt })
+		if (navigator.share) await navigator.share({ text })
 		else {
-			await navigator.clipboard.writeText(txt)
-			toast('Plan + link copied to clipboard')
+			await navigator.clipboard.writeText(text)
+			toast('Copied to clipboard')
 		}
 		questFlag('share')
 	} catch {}
-})
+}
 
-// fullscreen QR of your plan link — for friends without the app
-$('#qrPlan').addEventListener('click', async () => {
+async function openShareHub() {
 	if (!Object.keys(state.favs).length) return toast('Star some sets first!')
-	const name = getMyName() || editName() || 'A friend'
-	const url = `${location.origin}${BASE}/plan#p=${encodePlan(name)}`
+	if (!getMyName()) return openNameSheet() // set identity first
+	shareUrl = `${location.origin}${BASE}/plan#p=${encodePlan(myDisplayName())}`
 	try {
 		const QR = (await import('qrcode')).default
-		await QR.toCanvas($('#qrCanvas'), url, { width: 720, margin: 2, errorCorrectionLevel: 'M' })
+		await QR.toCanvas($('#qrCanvas'), shareUrl, { width: 720, margin: 2, errorCorrectionLevel: 'M' })
 	} catch {
-		return toast('Could not build the QR code')
+		// QR is a bonus; the share buttons still work without it
 	}
-	$('#qrName').textContent = `${name}'s Roo '26 plan`
+	$('#qrName').textContent = `${myDisplayName()}'s Roo '26`
 	$('#qrWrap').hidden = false
 	document.body.style.overflow = 'hidden'
-	questFlag('share')
-})
+}
+$('#sharePlan').addEventListener('click', openShareHub)
+// short message — easy to text
+$('#shareLink').addEventListener('click', () => shareText(`Here's my ROO26 🌈 ${shareUrl}`))
+// full set-by-set schedule + link
+$('#shareFull').addEventListener('click', () => shareText(planText() + '\nOpen it: ' + shareUrl))
 $('#qrClose').addEventListener('click', () => {
 	$('#qrWrap').hidden = true
 	document.body.style.overflow = ''
 })
 
 // importing a friend's plan from a shared link
+let pendingImport = null
 function checkImport() {
 	const m = location.hash.match(/^#p=(.+)$/)
 	if (!m) return
 	const plan = decodePlan(decodeURI(m[1]))
 	history.replaceState({}, '', location.pathname)
 	if (!plan || (!plan.going.length && !plan.interested.length)) return
-	if (!confirm(`🌈 ${plan.name} shared a Roo plan (${plan.going.length} sets). Save it to My Roo?`))
-		return
+	pendingImport = plan
+	renderImportPreview(plan)
+}
+
+// rich preview of an incoming shared plan — set list by day, overlaps flagged
+function renderImportPreview(plan) {
+	const goingSets = plan.going
+		.map((id) => SET_BY_ID[id])
+		.filter(Boolean)
+		.sort((a, b) => (a.startMs ?? Infinity) - (b.startMs ?? Infinity))
+	const overlap = goingSets.filter((s) => isFav(s.id)).length
+	$('#importTitle').textContent = `${plan.name} shared their Roo '26`
+	$('#importSub').textContent =
+		`${goingSets.length} set${goingSets.length === 1 ? '' : 's'}` + (overlap ? ` · ${overlap} you're also seeing 🤝` : '')
+	const frag = document.createDocumentFragment()
+	for (const d of SCHED.days) {
+		const ds = goingSets.filter((s) => s.day === d.id)
+		if (!ds.length) continue
+		frag.append(el('div', { class: 'import-day' }, d.full.toUpperCase()))
+		for (const s of ds) {
+			const both = isFav(s.id)
+			frag.append(
+				el(
+					'div',
+					{ class: 'import-row' + (both ? ' both' : '') },
+					el('span', {}, `${both ? '🤝 ' : ''}${s.artist}`),
+					el('span', { class: 'ir-t' }, `${s.start ? fmtTime(s.start) : 'TBA'} · ${s.stage.short}`),
+				),
+			)
+		}
+	}
+	$('#importList').replaceChildren(frag)
+	$('#importWrap').hidden = false
+	document.body.style.overflow = 'hidden'
+}
+
+function closeImport() {
+	$('#importWrap').hidden = true
+	document.body.style.overflow = ''
+	pendingImport = null
+}
+$('#importSave').addEventListener('click', () => {
+	const plan = pendingImport
+	if (!plan) return closeImport()
 	state.friends = state.friends.filter((f) => f.name !== plan.name)
 	state.friends.push({ ...plan, at: Date.now() })
 	saveFriends()
+	closeImport()
 	setTab('plan')
 	toast(`Saved ${plan.name}'s plan`)
-}
+})
+$('#importCancel').addEventListener('click', closeImport)
+$('#importWrap').addEventListener('click', (e) => {
+	if (e.target.id === 'importWrap') closeImport()
+})
 
 // ── calendar export (.ics) — native reminders that work offline ──
 $('#icsPlan').addEventListener('click', () => {

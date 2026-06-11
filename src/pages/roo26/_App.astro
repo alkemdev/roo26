@@ -123,9 +123,8 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 				<div class="plan-head">
 					<h2>My Roo</h2>
 					<div class="plan-actions">
-						<button class="tool-btn" id="sharePlan">Share</button>
-						<button class="tool-btn" id="qrPlan" title="QR code of your plan">⊞ QR</button>
-						<button class="tool-btn" id="icsPlan">📅</button>
+						<button class="tool-btn" id="sharePlan">📤 Share my Roo</button>
+						<button class="tool-btn" id="icsPlan" title="Add to your calendar">📅</button>
 						<button class="tool-btn tool-danger" id="clearPlan">Clear</button>
 					</div>
 				</div>
@@ -339,11 +338,46 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 			</div>
 		</div>
 
-		<!-- QR share: fullscreen, white for easy scanning in sunlight -->
+		<!-- your sharing identity: icon + name -->
+		<div class="sheet-wrap" id="nameSheetWrap" hidden>
+			<div class="sheet pin-sheet">
+				<div class="sheet-body">
+					<h3>Your sharing name</h3>
+					<p class="pin-hint">Shown on the plans, links & QR codes you share with friends.</p>
+					<div class="pin-emojis" id="nameEmojis"></div>
+					<input type="text" id="nameInput" placeholder="Your name" maxlength="24" enterkeyhint="done" />
+					<div class="sheet-actions">
+						<button class="sheet-btn sheet-primary" id="nameSave">Save</button>
+						<button class="sheet-btn" id="nameCancel">Cancel</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- rich preview when importing a friend's shared plan -->
+		<div class="sheet-wrap" id="importWrap" hidden>
+			<div class="sheet import-sheet">
+				<div class="sheet-body">
+					<h3 id="importTitle"></h3>
+					<p class="pin-hint" id="importSub"></p>
+					<div class="import-list" id="importList"></div>
+					<div class="sheet-actions">
+						<button class="sheet-btn sheet-primary" id="importSave">Save to My Roo</button>
+						<button class="sheet-btn" id="importCancel">Not now</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Share hub: QR (white for sunlight scanning) + text-a-friend buttons -->
 		<div class="qr-wrap" id="qrWrap" hidden>
 			<div class="qr-name" id="qrName"></div>
 			<canvas id="qrCanvas"></canvas>
-			<div class="qr-hint">Scan to open this plan — no app needed</div>
+			<div class="qr-hint">Scan to open my plan — no app needed</div>
+			<div class="qr-share-actions">
+				<button class="share-opt share-opt-primary" id="shareLink">📲 Text a friend the link</button>
+				<button class="share-opt" id="shareFull">📋 Share full schedule</button>
+			</div>
 			<button class="tool-btn qr-close" id="qrClose">Close</button>
 		</div>
 
@@ -1085,6 +1119,50 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		opacity: 0.75;
 		border-style: dashed;
 	}
+	/* friends also going to one of your sets */
+	.friends-at {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		flex-wrap: wrap;
+		margin: -0.15rem 0 0.45rem;
+		padding: 0.25rem 0.65rem;
+		border-radius: 8px;
+		background: rgba(176, 139, 255, 0.14);
+		border-left: 3px solid var(--roo-purple, #b08bff);
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: #d9caff;
+	}
+	/* rich import preview list */
+	.import-list {
+		max-height: 48vh;
+		overflow-y: auto;
+		margin: 0.1rem 0 0.3rem;
+	}
+	.import-day {
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 0.12em;
+		color: var(--mut);
+		margin: 0.55rem 0 0.15rem;
+	}
+	.import-row {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.6rem;
+		font-size: 0.82rem;
+		line-height: 1.45;
+		padding: 0.12rem 0;
+	}
+	.import-row.both {
+		color: var(--roo-green);
+		font-weight: 700;
+	}
+	.import-row .ir-t {
+		color: var(--mut);
+		white-space: nowrap;
+	}
 	.walk-note {
 		display: flex;
 		align-items: center;
@@ -1448,6 +1526,28 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		font-size: 0.9rem;
 		font-weight: 600;
 		text-align: center;
+	}
+	.qr-share-actions {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		width: min(20rem, 82vw);
+	}
+	.share-opt {
+		padding: 0.7rem 1rem;
+		border-radius: 12px;
+		border: 1.5px solid #14101f;
+		background: #fff;
+		color: #14101f;
+		font-size: 0.95rem;
+		font-weight: 800;
+	}
+	.share-opt:active {
+		transform: scale(0.98);
+	}
+	.share-opt-primary {
+		background: #14101f;
+		color: #fff;
 	}
 	.qr-close {
 		background: #14101f;
