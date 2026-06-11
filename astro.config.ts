@@ -12,5 +12,11 @@ export default defineConfig({
 	// (html_handling: auto-trailing-slash), so the canonical form has no slash.
 	trailingSlash: 'never',
 	compressHTML: true,
-	adapter: cloudflare(),
+	// This app uses neither Astro Sessions nor astro:assets image optimization.
+	// Left at defaults, @astrojs/cloudflare injects a SESSION KV binding and a
+	// Cloudflare IMAGES binding into the deploy config — and `wrangler deploy`
+	// then fails because those resources don't exist. Opt out of both so the
+	// Worker deploys with no external bindings required.
+	session: { driver: 'memory' },
+	adapter: cloudflare({ imageService: 'passthrough' }),
 })
