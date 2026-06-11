@@ -6,6 +6,9 @@ import { defineConfig } from 'astro/config'
 export default defineConfig({
 	site: 'https://roo26.alkem.dev',
 	srcDir: './src-roo26',
-	trailingSlash: 'never',
+	// Cloudflare Pages serves the directory-index routes with a trailing slash
+	// (/map → 307 → /map/), and the service worker precaches the slash forms.
+	// Match that so canonical/OG URLs point at the actual served URL.
+	trailingSlash: 'always',
 	compressHTML: true,
 })
