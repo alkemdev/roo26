@@ -75,10 +75,14 @@ const STAGES = Object.fromEntries(SCHED.stages.map((s) => [s.id, s]))
 // GROVE) + Snake & Jake's — add them here as their sets get transcribed.
 const STAGE_AREA = { what: 'centeroo', which: 'centeroo', this: 'centeroo', that: 'centeroo', other: 'centeroo', where: 'centeroo' }
 const SETS = SCHED.sets
-	.map((x) => {
+	.map((x, i) => {
 		const stage = STAGES[x.s] || { id: x.s, name: x.s, color: '#888', short: x.s }
 		return {
 			id: `${x.d}-${x.s}-${slug(x.a)}`,
+			// stable index into the SOURCE (declaration) order of schedule.json.
+			// Share links (v3) reference this, so APPENDING new sets never shifts
+			// anyone's existing links — only reordering existing rows would.
+			srcIdx: i,
 			artist: x.a,
 			day: x.d,
 			stage,
@@ -91,6 +95,11 @@ const SETS = SCHED.sets
 	})
 	.sort((a, b) => (a.startMs ?? Infinity) - (b.startMs ?? Infinity))
 const SET_BY_ID = Object.fromEntries(SETS.map((s) => [s.id, s]))
+// srcIdx → set, for decoding v3 (ID-stable) share links
+const SET_BY_SRC = Object.fromEntries(SETS.map((s) => [s.srcIdx, s]))
+// the pre-Outeroo time-sorted order, for decoding legacy v2 links (which indexed
+// into a Centeroo-only sorted list). Stable as long as Centeroo rows aren't reordered.
+const LEGACY_SETS = SETS.filter((s) => STAGE_AREA[s.stage.id] === 'centeroo')
 
 const FEST_START = epoch(SCHED.days[0].date + 'T00:00')
 const FEST_END = epoch(SCHED.days.at(-1).date + 'T23:59') + 8 * 3600e3
@@ -671,32 +680,45 @@ $('#clearPlan').addEventListener('click', () => {
 })
 
 // ── share: text + a link that carries your whole plan ──
+// v3 links reference stable srcIdx values, so appending new sets (e.g. Outeroo)
+// never shifts anyone's saved plan. Old v2 links indexed a Centeroo-only,
+// time-sorted list — still decoded via LEGACY_SETS.
 function encodePlan(name) {
 	const going = []
-	SETS.forEach((s, i) => {
-		if (isFav(s.id)) going.push(i)
+	SETS.forEach((s) => {
+		if (isFav(s.id)) going.push(s.srcIdx)
 	})
-	// format stays "2!" with an empty interested slot so older shared links still decode
-	return `2!${encodeURIComponent(name)}!${going.join('.')}!`
+	return `3!${encodeURIComponent(name)}!${going.join('.')}`
 }
 
 function decodePlan(hash) {
 	const parts = hash.split('!')
-	if (parts[0] !== '2' || parts.length < 4) return null
-	const idx = (s) =>
+	const ver = parts[0]
+	const ids = (s, table) =>
 		s
 			? s
 					.split('.')
 					.map(Number)
-					.filter((i) => SETS[i])
-					.map((i) => SETS[i].id)
+					.map((i) => table[i])
+					.filter(Boolean)
+					.map((set) => set.id)
 			: []
-	// old two-tier links: fold "interested" into the single list
-	return {
-		name: decodeURIComponent(parts[1]) || 'A friend',
-		going: [...idx(parts[2]), ...idx(parts[3])],
-		interested: [],
+	if (ver === '3') {
+		return {
+			name: decodeURIComponent(parts[1] || '') || 'A friend',
+			going: ids(parts[2], SET_BY_SRC),
+			interested: [],
+		}
 	}
+	// legacy v2 (and its folded two-tier slot): index into the pre-Outeroo order
+	if (ver === '2' && parts.length >= 4) {
+		return {
+			name: decodeURIComponent(parts[1]) || 'A friend',
+			going: [...ids(parts[2], LEGACY_SETS), ...ids(parts[3], LEGACY_SETS)],
+			interested: [],
+		}
+	}
+	return null
 }
 
 function planText() {
