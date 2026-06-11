@@ -356,6 +356,7 @@ const ogImage =
 		<div class="compass-wrap" id="compassWrap" hidden>
 			<button class="omap-close compass-close" id="compassClose" aria-label="Close">✕</button>
 			<button class="compass-name" id="compassName"></button>
+			<button class="compass-cycle" id="compassCycle" hidden></button>
 			<div class="compass-arrow-box"><div class="compass-arrow" id="compassArrow">⬆</div></div>
 			<div class="compass-dist" id="compassDist"></div>
 			<div class="compass-hint" id="compassHint"></div>
@@ -694,6 +695,15 @@ const ogImage =
 	}
 	.chip.active .dot {
 		background: rgba(0, 0, 0, 0.35);
+	}
+	/* area super-filters (Everything / Centeroo / Outeroo) */
+	.chip-area {
+		font-weight: 800;
+		letter-spacing: 0.02em;
+	}
+	.chip-area.active {
+		background: var(--rainbow);
+		color: #0b0814;
 	}
 	.tool-btn {
 		flex-shrink: 0;
@@ -1439,6 +1449,49 @@ const ogImage =
 		color: var(--dim);
 		font-size: 0.72rem;
 		min-height: 1em;
+	}
+	.compass-cycle {
+		color: var(--mut);
+		font-size: 0.78rem;
+		font-weight: 700;
+		padding: 0.25rem 0.7rem;
+		border-radius: 999px;
+		background: transparent;
+		border: 1px solid var(--line);
+		margin-top: -0.2rem;
+	}
+	.pop-events {
+		margin-top: 0.4rem;
+		border-top: 1px solid var(--line);
+		padding-top: 0.3rem;
+	}
+	.pop-ev-h {
+		font-size: 0.66rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--dim);
+		margin-bottom: 0.15rem;
+	}
+	.pop-ev {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.6rem;
+		font-size: 0.78rem;
+		line-height: 1.5;
+	}
+	.pop-ev .pe-a {
+		font-weight: 700;
+	}
+	.pop-ev .pe-t {
+		color: var(--mut);
+		white-space: nowrap;
+	}
+	.pop-actions {
+		margin-top: 0.4rem;
+	}
+	.pop-guide {
+		background: var(--roo-green);
+		color: #0b0814;
 	}
 	.user-dot.stale {
 		background: #8fa3ad;

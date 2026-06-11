@@ -48,6 +48,17 @@ function hourLabel(iso) {
 	return `${h} ${ap}`
 }
 
+// "in 35 min" / "in 1h 20m" countdown to a future epoch (ms)
+function untilLabel(ms, now = Date.now()) {
+	const diff = ms - now
+	if (diff <= 0) return 'now'
+	const m = Math.round(diff / 60000)
+	if (m < 60) return `in ${m} min`
+	const h = Math.floor(m / 60)
+	const mm = m % 60
+	return mm ? `in ${h}h ${mm}m` : `in ${h}h`
+}
+
 let toastTimer
 function toast(msg) {
 	const t = $('#toast')
@@ -59,6 +70,11 @@ function toast(msg) {
 
 // ───────────────────────── data prep ─────────────────────────
 const STAGES = Object.fromEntries(SCHED.stages.map((s) => [s.id, s]))
+// Festival area each stage lives in. For 2026 every stage moved inside
+// Centeroo (That Tent → What field, Where Stage → Centeroo); Outeroo is
+// camping/plazas/parking with no music stages. Kept as a map so it's a
+// one-line change if a campground stage ever returns.
+const STAGE_AREA = { what: 'centeroo', which: 'centeroo', this: 'centeroo', that: 'centeroo', other: 'centeroo', where: 'centeroo' }
 const SETS = SCHED.sets
 	.map((x) => {
 		const stage = STAGES[x.s] || { id: x.s, name: x.s, color: '#888', short: x.s }
@@ -311,13 +327,20 @@ function renderDayTabs() {
 	)
 }
 
+// stage filter accepts 'all', an area ('centeroo'|'outeroo'), or a stage id
+function stageMatches(s) {
+	if (state.stage === 'all') return true
+	if (state.stage === 'centeroo' || state.stage === 'outeroo') return STAGE_AREA[s.stage.id] === state.stage
+	return s.stage.id === state.stage
+}
+
 function renderStageChips() {
 	const wrap = $('#stageChips')
-	const mk = (id, name, color) => {
+	const mk = (id, name, color, extra = '') => {
 		const c = el(
 			'button',
 			{
-				class: 'chip' + (state.stage === id ? ' active' : ''),
+				class: 'chip' + extra + (state.stage === id ? ' active' : ''),
 				style: color ? `--chip-c:${color}` : '',
 			},
 			color ? el('span', { class: 'dot' }) : null,
@@ -331,7 +354,9 @@ function renderStageChips() {
 		return c
 	}
 	wrap.replaceChildren(
-		mk('all', 'All stages', null),
+		mk('all', 'Everything', null, ' chip-area'),
+		mk('centeroo', 'Centeroo', null, ' chip-area'),
+		mk('outeroo', 'Outeroo', null, ' chip-area'),
 		...SCHED.stages.map((s) => mk(s.id, s.name, s.color)),
 	)
 }
@@ -341,7 +366,7 @@ function visibleSets() {
 	return SETS.filter(
 		(s) =>
 			s.day === state.day &&
-			(state.stage === 'all' || s.stage.id === state.stage) &&
+			stageMatches(s) &&
 			(!q || s.artist.toLowerCase().includes(q) || (s.info?.g || '').includes(q)),
 	)
 }
@@ -355,18 +380,17 @@ function renderSched() {
 		? SETS.filter(
 				(s) =>
 					s.day !== state.day &&
-					(state.stage === 'all' || s.stage.id === state.stage) &&
+					stageMatches(s) &&
 					(s.artist.toLowerCase().includes(q) || (s.info?.g || '').includes(q)),
 			)
 		: []
 	if (!sets.length && !otherDays.length) {
-		list.replaceChildren(
-			el(
-				'div',
-				{ class: 'empty-note' },
-				state.search ? `No artists matching “${state.search}”.` : 'Nothing here yet.',
-			),
-		)
+		const emptyMsg = state.search
+			? `No artists matching “${state.search}”.`
+			: state.stage === 'outeroo'
+				? 'No music stages in Outeroo this year — all sets are in Centeroo. Outeroo is camping, plazas & parking.'
+				: 'Nothing here yet.'
+		list.replaceChildren(el('div', { class: 'empty-note' }, emptyMsg))
 		return
 	}
 	const frag = document.createDocumentFragment()
@@ -892,23 +916,40 @@ async function initMap() {
 	}
 }
 
-// popups show description + what's on now / next at stages
+// popups show description + what's on now / coming up at stages, and a
+// "Guide me" button that points the compass at this place.
 function poiPopup(p) {
+	const emoji = p.emoji || POI_CATS[p.cat]?.emoji || '📍'
 	const wrap = el('div', {}, el('b', {}, p.name))
 	if (p.desc) wrap.append(el('div', { class: 'pop-desc' }, p.desc))
 	if (p.cat === 'stage' && p.stage) {
 		const now = Date.now()
 		const stageSets = SETS.filter((s) => s.stage.id === p.stage)
 		const live = stageSets.find((s) => setStatus(s, now) === 'live')
-		const next = stageSets.find((s) => s.startMs && s.startMs > now)
+		const upcoming = stageSets.filter((s) => s.startMs && s.startMs > now).slice(0, live ? 2 : 3)
 		if (live)
-			wrap.append(
-				el('div', { class: 'pop-now' }, `▶ NOW: ${live.artist} (until ${fmtTime(live.end)})`),
-			)
-		if (next)
-			wrap.append(el('div', { class: 'pop-next' }, `next: ${next.artist} · ${fmtTime(next.start)}`))
-		if (!live && !next) wrap.append(el('div', { class: 'pop-next' }, 'no more sets here — 🌈'))
+			wrap.append(el('div', { class: 'pop-now' }, `▶ NOW: ${live.artist} · until ${fmtTime(live.end)}`))
+		if (upcoming.length) {
+			const ev = el('div', { class: 'pop-events' }, el('div', { class: 'pop-ev-h' }, live ? 'Next up' : 'Coming up'))
+			for (const s of upcoming)
+				ev.append(
+					el(
+						'div',
+						{ class: 'pop-ev' },
+						el('span', { class: 'pe-a' }, s.artist),
+						el('span', { class: 'pe-t' }, `${fmtTime(s.start)} · ${untilLabel(s.startMs, now)}`),
+					),
+				)
+			wrap.append(ev)
+		}
+		if (!live && !upcoming.length) wrap.append(el('div', { class: 'pop-next' }, 'no more sets here — 🌈'))
 	}
+	const guide = el('button', { class: 'pop-btn pop-guide' }, '🧭 Guide me')
+	guide.addEventListener('click', () => {
+		map?.closePopup()
+		openCompass({ name: p.name, emoji, lat: p.lat, lon: p.lon })
+	})
+	wrap.append(el('div', { class: 'pop-actions' }, guide))
 	return wrap
 }
 
@@ -1301,7 +1342,18 @@ function drawPins() {
 				toast(`${pin.emoji} ${pin.name} removed`)
 				renderNearest()
 			})
-			return el('div', {}, el('b', {}, `${pin.emoji} ${pin.name}`), el('br'), move, ' ', rename, ' ', rm)
+			const guide = el('button', { class: 'pop-btn pop-guide' }, '🧭 Guide me')
+			guide.addEventListener('click', () => {
+				m.closePopup()
+				openCompass({ name: pin.name, emoji: pin.emoji, lat: pin.lat, lon: pin.lon })
+			})
+			return el(
+				'div',
+				{},
+				el('b', {}, `${pin.emoji} ${pin.name}`),
+				el('div', { class: 'pop-actions' }, guide),
+				el('div', { class: 'pop-actions' }, move, ' ', rename, ' ', rm),
+			)
 		})
 		m.on('dragend', () => {
 			const ll = m.getLatLng()
@@ -1468,15 +1520,28 @@ function renderNearest() {
 	)
 }
 
-// — take-me-home compass: point at any saved pin, 2 AM-proof —
+// — guide compass: point at any saved pin OR any place you tapped, 2 AM-proof —
 let compassTarget = 0
+let compassFocus = null // an arbitrary tapped place: {name, emoji, lat, lon} | null
 let headingHandler = null
+let lastHeading = null
 
-async function openCompass() {
-	if (!state.pins.length) {
-		toast('Drop a ⛺ pin first so I know where home is')
+// what the compass can point at: the focused place (if any) first, then pins
+function compassTargets() {
+	const pins = state.pins.map((p) => ({ name: p.name, emoji: p.emoji, lat: p.lat, lon: p.lon }))
+	return compassFocus ? [compassFocus, ...pins] : pins
+}
+
+// focus is a {name,emoji,lat,lon} place to guide to; omitted (e.g. the 🧭 FAB)
+// = pure take-me-home mode through your pins.
+async function openCompass(focus = null) {
+	compassFocus = focus && typeof focus.lat === 'number' && typeof focus.lon === 'number' ? focus : null
+	const targets = compassTargets()
+	if (!targets.length) {
+		toast('Tap a place on the map (or drop a ⛺ pin) to guide there')
 		return
 	}
+	compassTarget = 0
 	$('#compassWrap').hidden = false
 	document.body.style.overflow = 'hidden'
 	if (watchId == null) startLocate(true)
@@ -1485,37 +1550,51 @@ async function openCompass() {
 		if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission)
 			await DeviceOrientationEvent.requestPermission()
 	} catch {}
-	let heading = null
+	lastHeading = null
 	headingHandler = (e) => {
-		heading = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null)
-		paintCompass(heading)
+		lastHeading = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null)
+		paintCompass()
 	}
 	window.addEventListener('deviceorientationabsolute', headingHandler)
 	window.addEventListener('deviceorientation', headingHandler)
-	paintCompass(heading)
+	paintCompass()
 	if (compassTimer) clearInterval(compassTimer)
-	compassTimer = setInterval(() => paintCompass(heading), 1500)
+	compassTimer = setInterval(paintCompass, 1000)
 }
 
 let compassTimer = null
 
-function paintCompass(heading) {
-	const pin = state.pins[compassTarget % state.pins.length]
-	if (!pin) return
-	$('#compassName').textContent = `${pin.emoji} ${pin.name}`
+function paintCompass() {
+	const targets = compassTargets()
+	const t = targets[compassTarget % targets.length]
+	if (!t) return closeCompass()
+	const heading = lastHeading
+	$('#compassName').textContent = `${t.emoji || '📍'} ${t.name}`
+	const cycle = $('#compassCycle')
+	cycle.hidden = targets.length < 2
+	cycle.textContent = `${(compassTarget % targets.length) + 1}/${targets.length} · tap to switch ▾`
 	if (!state.pos) {
 		$('#compassDist').textContent = 'finding you…'
+		$('#compassArrow').style.transform = ''
 		return
 	}
-	const dist = haversine(state.pos, pin)
+	const dist = haversine(state.pos, t)
 	$('#compassDist').textContent = `${fmtDist(dist)} · ${fmtWalk(dist) || 'far'}`
-	const brg = bearing(state.pos, pin)
+	const brg = bearing(state.pos, t)
 	const rot = heading == null ? brg : brg - heading
 	$('#compassArrow').style.transform = `rotate(${rot}deg)`
 	$('#compassHint').textContent =
 		heading == null ? 'arrow points relative to north — hold phone flat' : 'follow the arrow'
 	const age = Math.round((Date.now() - state.pos.at) / 1000)
 	$('#compassAge').textContent = age > 20 ? `last fix ${age}s ago` : ''
+}
+
+function cycleCompass() {
+	const n = compassTargets().length
+	if (n > 1) {
+		compassTarget = (compassTarget + 1) % n
+		paintCompass()
+	}
 }
 
 function closeCompass() {
@@ -1530,12 +1609,10 @@ function closeCompass() {
 	}
 }
 
-$('#fabHome').addEventListener('click', openCompass)
+$('#fabHome').addEventListener('click', () => openCompass())
 $('#compassClose').addEventListener('click', closeCompass)
-$('#compassName').addEventListener('click', () => {
-	compassTarget = (compassTarget + 1) % state.pins.length
-	paintCompass(null)
-})
+$('#compassName').addEventListener('click', cycleCompass)
+$('#compassCycle').addEventListener('click', cycleCompass)
 
 // — official map viewer (pinch-zoom over the official festival map images) —
 const OMAPS = {
