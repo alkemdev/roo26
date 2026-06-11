@@ -129,6 +129,7 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 						<button class="tool-btn tool-danger" id="clearPlan">Clear</button>
 					</div>
 				</div>
+				<button class="name-chip" id="nameChip" title="This name is used on your shared links, QR codes & crew"></button>
 				<div id="planBody"></div>
 			</section>
 
@@ -2040,6 +2041,27 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	.plan-actions {
 		display: flex;
 		gap: 0.45rem;
+	}
+	/* editable display name used for sharing (links/QR/crew) */
+	.name-chip {
+		display: block;
+		width: 100%;
+		text-align: left;
+		margin-bottom: 0.6rem;
+		padding: 0.4rem 0.7rem;
+		border-radius: 10px;
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		color: var(--mut);
+		font-size: 0.8rem;
+		font-weight: 600;
+	}
+	.name-chip b {
+		color: var(--txt);
+	}
+	.name-chip .name-edit {
+		color: var(--roo-blue);
+		font-weight: 800;
 	}
 	.plan-day-h {
 		padding: 0.8rem 0.2rem 0.35rem;

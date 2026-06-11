@@ -614,6 +614,7 @@ const stageDist = (a, b) =>
 	STAGE_POI[a] && STAGE_POI[b] && a !== b ? haversine(STAGE_POI[a], STAGE_POI[b]) : 0
 
 function renderPlan() {
+	renderNameChip()
 	const body = $('#planBody')
 	const favs = SETS.filter((s) => isFav(s.id))
 	const frag = document.createDocumentFragment()
@@ -789,13 +790,30 @@ function planText() {
 	return txt
 }
 
+// ── your display name: one editable username for links, QR codes & crew ──
+const getMyName = () => store.get('myname', '')
+function editName() {
+	const next = (prompt('Your name — shown on your shared links, QR codes & to your crew:', getMyName()) || '').trim()
+	if (!next) return getMyName() // cancelled / blank: keep what we had
+	store.set('myname', next.slice(0, 24))
+	renderNameChip()
+	return getMyName()
+}
+function renderNameChip() {
+	const chip = $('#nameChip')
+	if (!chip) return
+	const name = getMyName()
+	chip.replaceChildren(
+		name
+			? el('span', {}, 'Sharing as ', el('b', {}, name), ' · ', el('span', { class: 'name-edit' }, '✏️ edit'))
+			: el('span', { class: 'name-edit' }, '✏️ Set your name for sharing'),
+	)
+}
+$('#nameChip').addEventListener('click', editName)
+
 $('#sharePlan').addEventListener('click', async () => {
 	if (!Object.keys(state.favs).length) return toast('Star some sets first!')
-	let name = store.get('myname', '')
-	if (!name) {
-		name = (prompt('Your name (shown to friends who open your link):') || 'A friend').trim()
-		store.set('myname', name)
-	}
+	const name = getMyName() || editName() || 'A friend'
 	const url = `${location.origin}${BASE}/plan#p=${encodePlan(name)}`
 	const txt = planText() + '\nOpen my full plan: ' + url
 	try {
@@ -811,11 +829,7 @@ $('#sharePlan').addEventListener('click', async () => {
 // fullscreen QR of your plan link — for friends without the app
 $('#qrPlan').addEventListener('click', async () => {
 	if (!Object.keys(state.favs).length) return toast('Star some sets first!')
-	let name = store.get('myname', '')
-	if (!name) {
-		name = (prompt('Your name (shown when friends scan):') || 'A friend').trim()
-		store.set('myname', name)
-	}
+	const name = getMyName() || editName() || 'A friend'
 	const url = `${location.origin}${BASE}/plan#p=${encodePlan(name)}`
 	try {
 		const QR = (await import('qrcode')).default
