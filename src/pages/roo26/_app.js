@@ -70,13 +70,11 @@ function toast(msg) {
 
 // ───────────────────────── data prep ─────────────────────────
 const STAGES = Object.fromEntries(SCHED.stages.map((s) => [s.id, s]))
-// Festival area each stage lives in. The six main stages are all in Centeroo
-// for 2026. Outeroo has its own Plaza stages (WHY/WHEN/GROOP/SILENT DISCO/THE
-// GROVE) + Snake & Jake's — add them here as their sets get transcribed.
-const STAGE_AREA = {
-	what: 'centeroo', which: 'centeroo', this: 'centeroo', that: 'centeroo', other: 'centeroo', where: 'centeroo',
-	when: 'outeroo', silent: 'outeroo',
-}
+// The six main stages are Centeroo; everything else — all the Plaza stages
+// (When/Silent Disco/Groop/Why/Grove…) and Snake & Jake's — is Outeroo. New
+// stages need no edit here: anything not in this set defaults to Outeroo.
+const CENTEROO_STAGES = new Set(['what', 'which', 'this', 'that', 'other', 'where'])
+const areaOf = (stageId) => (CENTEROO_STAGES.has(stageId) ? 'centeroo' : 'outeroo')
 const SETS = SCHED.sets
 	.map((x, i) => {
 		const stage = STAGES[x.s] || { id: x.s, name: x.s, color: '#888', short: x.s }
@@ -102,7 +100,7 @@ const SET_BY_ID = Object.fromEntries(SETS.map((s) => [s.id, s]))
 const SET_BY_SRC = Object.fromEntries(SETS.map((s) => [s.srcIdx, s]))
 // the pre-Outeroo time-sorted order, for decoding legacy v2 links (which indexed
 // into a Centeroo-only sorted list). Stable as long as Centeroo rows aren't reordered.
-const LEGACY_SETS = SETS.filter((s) => STAGE_AREA[s.stage.id] === 'centeroo')
+const LEGACY_SETS = SETS.filter((s) => areaOf(s.stage.id) === 'centeroo')
 
 const FEST_START = epoch(SCHED.days[0].date + 'T00:00')
 const FEST_END = epoch(SCHED.days.at(-1).date + 'T23:59') + 8 * 3600e3
@@ -341,7 +339,7 @@ function renderDayTabs() {
 // stage filter accepts 'all', an area ('centeroo'|'outeroo'), or a stage id
 function stageMatches(s) {
 	if (state.stage === 'all') return true
-	if (state.stage === 'centeroo' || state.stage === 'outeroo') return STAGE_AREA[s.stage.id] === state.stage
+	if (state.stage === 'centeroo' || state.stage === 'outeroo') return areaOf(s.stage.id) === state.stage
 	return s.stage.id === state.stage
 }
 
@@ -1842,6 +1840,8 @@ $$('#omapTabs button').forEach((b) => b.addEventListener('click', () => openOmap
 
 // ───────────────────────── weather + alerts ─────────────────────────
 const WX_POINT = `${POIS.center[0].toFixed(4)},${POIS.center[1].toFixed(4)}`
+// full NWS forecast for the Farm — each weather card links here (new tab)
+const WX_REPORT_URL = `https://forecast.weather.gov/MapClick.php?lat=${POIS.center[0]}&lon=${POIS.center[1]}`
 let weatherLoaded = false
 
 async function loadWeather() {
@@ -1875,12 +1875,13 @@ function renderWeather(periods, src) {
 	$('#weatherDays').replaceChildren(
 		...periods.map((p) =>
 			el(
-				'div',
-				{ class: 'wx-day' },
-				el('div', { class: 'wx-n' }, p.name),
+				'a',
+				{ class: 'wx-day', href: WX_REPORT_URL, target: '_blank', rel: 'noopener', title: 'Open the full NWS forecast' },
+				el('div', { class: 'wx-n' }, p.name, el('span', { class: 'wx-ext' }, ' ↗')),
 				el('div', { class: 'wx-t' }, p.temp),
 				el('div', { class: 'wx-d' }, p.short),
-				p.rain != null && p.rain > 0 ? el('div', { class: 'wx-r' }, `💧 ${p.rain}% rain`) : null,
+				// always render the rain row (blank when dry) so every card is the same size
+				el('div', { class: 'wx-r' }, p.rain != null && p.rain > 0 ? `💧 ${p.rain}% rain` : ''),
 			),
 		),
 	)

@@ -1349,13 +1349,15 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	.user-head::before {
 		content: '';
 		position: absolute;
-		top: -8px;
+		top: -12px;
 		left: 50%;
 		transform: translateX(-50%);
-		border-left: 5px solid transparent;
-		border-right: 5px solid transparent;
-		border-bottom: 8px solid #fff;
-		filter: drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.5));
+		border-left: 7px solid transparent;
+		border-right: 7px solid transparent;
+		border-bottom: 13px solid #fff;
+		/* dark outline so the heading arrow reads clearly against both the blue
+		   dot and bright daytime satellite imagery */
+		filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9));
 	}
 	.focus-ping {
 		font-size: 1.8rem;
@@ -2097,17 +2099,40 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	}
 	.wx-day {
 		flex-shrink: 0;
-		min-width: 7.2rem;
+		/* fixed footprint so every card is identical; the row stretches them to
+		   equal height, and the always-present rain row keeps content aligned */
+		width: 8rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.12rem;
 		padding: 0.5rem 0.6rem;
 		border-radius: 10px;
 		background: rgba(18, 13, 29, 0.55);
 		border: 1px solid var(--line);
 		line-height: 1.3;
+		text-decoration: none;
+		color: inherit;
+		transition: border-color 0.15s, background 0.15s;
+	}
+	.wx-day:active {
+		border-color: var(--roo-blue);
+		background: rgba(70, 179, 255, 0.12);
 	}
 	.wx-day .wx-n {
 		font-weight: 800;
 		color: var(--txt);
 		font-size: 0.78rem;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.wx-day .wx-ext {
+		color: var(--dim);
+		font-size: 0.7rem;
+		font-weight: 700;
+	}
+	.wx-day .wx-d {
+		flex: 1;
 	}
 	.wx-day .wx-t {
 		font-weight: 900;
