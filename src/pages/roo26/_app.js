@@ -721,9 +721,11 @@ function renderFriends(frag) {
 		})
 		const rm = el('button', { class: 'friend-rm', 'aria-label': 'Remove' }, '✕')
 		rm.addEventListener('click', () => {
+			if (!confirm(`Remove ${f.name}'s plan from My Roo?`)) return
 			state.friends = state.friends.filter((x) => x !== f)
 			saveFriends()
 			renderPlan()
+			toast(`Removed ${f.name}'s plan`)
 		})
 		card.append(head, rm, listEl)
 		frag.append(card)
@@ -897,6 +899,136 @@ $('#qrClose').addEventListener('click', () => {
 	document.body.style.overflow = ''
 })
 
+// ───────────────────────── Spotify warm-up playlist ─────────────────────────
+// Turns your starred artists into a playlist of their top tracks, in your
+// Spotify account. Browser-only OAuth (PKCE) — no server secret. To enable:
+// paste your Spotify app's Client ID below (it's a public value) and register
+// the redirect URI shown in SPOTIFY_REDIRECT in the Spotify developer dashboard.
+const SPOTIFY_CLIENT_ID = '' // ← paste Client ID here to switch the feature on
+const SPOTIFY_REDIRECT = `${location.origin}${BASE}/plan`
+const SPOTIFY_SCOPES = 'playlist-modify-private playlist-modify-public'
+
+const b64url = (buf) =>
+	btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+const sha256 = (s) => crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
+const randStr = (n = 64) => b64url(crypto.getRandomValues(new Uint8Array(n)))
+
+async function spotifyAuth() {
+	const verifier = randStr()
+	const challenge = b64url(await sha256(verifier))
+	store.set('spotify_pkce', verifier)
+	store.set('spotify_pending', true)
+	const p = new URLSearchParams({
+		client_id: SPOTIFY_CLIENT_ID,
+		response_type: 'code',
+		redirect_uri: SPOTIFY_REDIRECT,
+		code_challenge_method: 'S256',
+		code_challenge: challenge,
+		scope: SPOTIFY_SCOPES,
+	})
+	location.href = `https://accounts.spotify.com/authorize?${p}`
+}
+
+async function spotifyTokenReq(params) {
+	const r = await fetch('https://accounts.spotify.com/api/token', {
+		method: 'POST',
+		headers: { 'content-type': 'application/x-www-form-urlencoded' },
+		body: new URLSearchParams({ client_id: SPOTIFY_CLIENT_ID, ...params }),
+	})
+	if (!r.ok) throw new Error('spotify token')
+	return r.json()
+}
+
+// return a valid access token (refreshing if needed), or null if not signed in
+async function spotifyToken() {
+	const t = store.get('spotify', null)
+	if (!t) return null
+	if (Date.now() < t.exp - 60e3) return t.access
+	if (!t.refresh) return null
+	try {
+		const j = await spotifyTokenReq({ grant_type: 'refresh_token', refresh_token: t.refresh })
+		const next = { access: j.access_token, refresh: j.refresh_token || t.refresh, exp: Date.now() + j.expires_in * 1000 }
+		store.set('spotify', next)
+		return next.access
+	} catch {
+		store.del('spotify')
+		return null
+	}
+}
+
+const spApi = (access) => (path, opts = {}) =>
+	fetch(`https://api.spotify.com/v1${path}`, {
+		...opts,
+		headers: { authorization: `Bearer ${access}`, 'content-type': 'application/json', ...(opts.headers || {}) },
+	})
+
+async function buildSpotifyPlaylist() {
+	if (!SPOTIFY_CLIENT_ID) return
+	const fav = SETS.filter((s) => isFav(s.id))
+	if (!fav.length) return toast('Star some sets first!')
+	const access = await spotifyToken()
+	if (!access) return spotifyAuth() // sign in, then resume on redirect
+	toast('Building your Spotify playlist…')
+	try {
+		const api = spApi(access)
+		const ids = [...new Set(fav.map((s) => s.info?.id).filter(Boolean))] // unique artist IDs
+		const uris = []
+		for (const id of ids) {
+			const r = await api(`/artists/${id}/top-tracks?market=US`)
+			if (!r.ok) continue
+			const j = await r.json()
+			for (const t of (j.tracks || []).slice(0, 3)) uris.push(t.uri)
+		}
+		if (!uris.length) return toast('Couldn’t find tracks for your artists')
+		const me = await (await api('/me')).json()
+		const pl = await (
+			await api(`/users/${me.id}/playlists`, {
+				method: 'POST',
+				body: JSON.stringify({
+					name: "My Roo '26 🌈",
+					description: `Warm-up for Bonnaroo 2026 — ${ids.length} artists from my plan @ roo26.alkem.dev`,
+					public: false,
+				}),
+			})
+		).json()
+		for (let i = 0; i < uris.length; i += 100)
+			await api(`/playlists/${pl.id}/tracks`, { method: 'POST', body: JSON.stringify({ uris: uris.slice(i, i + 100) }) })
+		toast(`🎵 Playlist ready — ${uris.length} tracks!`)
+		window.open(pl.external_urls.spotify, '_blank')
+		questFlag('share')
+	} catch {
+		toast('Spotify hiccup — try again')
+	}
+}
+
+// after the OAuth redirect we land back on /plan?code=… — finish + resume
+async function spotifyOnLoad() {
+	const code = new URLSearchParams(location.search).get('code')
+	if (!code || !store.get('spotify_pending', false)) return
+	store.del('spotify_pending')
+	history.replaceState({}, '', location.pathname)
+	try {
+		const j = await spotifyTokenReq({
+			grant_type: 'authorization_code',
+			code,
+			redirect_uri: SPOTIFY_REDIRECT,
+			code_verifier: store.get('spotify_pkce', ''),
+		})
+		store.set('spotify', { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + j.expires_in * 1000 })
+		store.del('spotify_pkce')
+		setTab('plan')
+		buildSpotifyPlaylist()
+	} catch {
+		toast('Spotify sign-in failed')
+	}
+}
+
+if ($('#spotifyPlan')) {
+	$('#spotifyPlan').hidden = !SPOTIFY_CLIENT_ID
+	$('#spotifyPlan').addEventListener('click', buildSpotifyPlaylist)
+}
+spotifyOnLoad()
+
 // importing a friend's plan from a shared link
 let pendingImport = null
 function checkImport() {
@@ -916,9 +1048,13 @@ function renderImportPreview(plan) {
 		.filter(Boolean)
 		.sort((a, b) => (a.startMs ?? Infinity) - (b.startMs ?? Infinity))
 	const overlap = goingSets.filter((s) => isFav(s.id)).length
+	const existing = state.friends.some((f) => f.name === plan.name)
 	$('#importTitle').textContent = `${plan.name} shared their Roo '26`
 	$('#importSub').textContent =
-		`${goingSets.length} set${goingSets.length === 1 ? '' : 's'}` + (overlap ? ` · ${overlap} you're also seeing 🤝` : '')
+		`${goingSets.length} set${goingSets.length === 1 ? '' : 's'}` +
+		(overlap ? ` · ${overlap} you're also seeing 🤝` : '') +
+		(existing ? ' · updates the copy you saved' : '')
+	$('#importSave').textContent = existing ? `Update ${plan.name}'s plan` : 'Save to My Roo'
 	const frag = document.createDocumentFragment()
 	for (const d of SCHED.days) {
 		const ds = goingSets.filter((s) => s.day === d.id)
