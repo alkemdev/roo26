@@ -1,0 +1,415 @@
+{
+  "center": [
+    35.4714,
+    -86.0517
+  ],
+  "centerooBounds": [
+    [
+      35.467,
+      -86.057
+    ],
+    [
+      35.476,
+      -86.046
+    ]
+  ],
+  "farmBounds": [
+    [
+      35.46,
+      -86.067
+    ],
+    [
+      35.492,
+      -86.026
+    ]
+  ],
+  "pois": [
+    {
+      "name": "What Stage",
+      "lat": 35.46903,
+      "lon": -86.04885,
+      "cat": "stage",
+      "stage": "what",
+      "emoji": "🎸",
+      "desc": "The big one — main stage on the SE bowl. Headliners: Skrillex, The Strokes, RÜFÜS DU SOL, Noah Kahan."
+    },
+    {
+      "name": "Which Stage",
+      "lat": 35.46949,
+      "lon": -86.05148,
+      "cat": "stage",
+      "stage": "which",
+      "emoji": "🎤",
+      "desc": "Second stage, south-central Centeroo. Kesha closes it Sunday."
+    },
+    {
+      "name": "This Tent",
+      "lat": 35.47227,
+      "lon": -86.05401,
+      "cat": "stage",
+      "stage": "this",
+      "emoji": "🎪",
+      "desc": "Pavilion on the west tree line. Kesha's SuperJam Saturday, Modest Mouse Sunday."
+    },
+    {
+      "name": "That Tent",
+      "lat": 35.4708,
+      "lon": -86.0478,
+      "cat": "stage",
+      "stage": "that",
+      "emoji": "🎪",
+      "desc": "Moved into the What Stage field for 2026 (first time ever) — location approximate."
+    },
+    {
+      "name": "The Other",
+      "lat": 35.47373,
+      "lon": -86.05324,
+      "cat": "stage",
+      "stage": "other",
+      "emoji": "🔊",
+      "desc": "EDM superstructure, NW field. Sunrise sets Friday & Saturday nights."
+    },
+    {
+      "name": "Where Stage",
+      "lat": 35.4703,
+      "lon": -86.0538,
+      "cat": "stage",
+      "stage": "where",
+      "emoji": "🛸",
+      "desc": "The UFO — moved inside Centeroo for '26. Late-night Fri & Sat only. Location approximate."
+    },
+    {
+      "name": "Bonnaroo Fountain",
+      "lat": 35.47143,
+      "lon": -86.05166,
+      "cat": "landmark",
+      "emoji": "⛲",
+      "desc": "The classic mushroom fountain — center of Centeroo and the best meetup spot on the Farm."
+    },
+    {
+      "name": "Clock Tower & Ferris Wheel",
+      "lat": 35.474,
+      "lon": -86.0515,
+      "cat": "landmark",
+      "emoji": "🎡",
+      "desc": "By the Tower Entrance on the north edge (approx.)."
+    },
+    {
+      "name": "Planet Roo",
+      "lat": 35.4724,
+      "lon": -86.051,
+      "cat": "landmark",
+      "emoji": "🌱",
+      "desc": "Community hub: The Academy, Snake & Jake's, Bonnaroots (approx.)."
+    },
+    {
+      "name": "The Oasis & waterslide",
+      "lat": 35.4737,
+      "lon": -86.0545,
+      "cat": "landmark",
+      "emoji": "🛝",
+      "desc": "Cool-off zone near The Other, with the Big Ass Waterslide (approx.)."
+    },
+    {
+      "name": "The Arch (NE entrance)",
+      "lat": 35.47227,
+      "lon": -86.04869,
+      "cat": "entrance",
+      "emoji": "🌈",
+      "desc": "Main pedestrian entrance under the rainbow arch. Wristband help + lockers + merch nearby."
+    },
+    {
+      "name": "Tower Entrance (N)",
+      "lat": 35.47422,
+      "lon": -86.05143,
+      "cat": "entrance",
+      "emoji": "🗼",
+      "desc": "North pedestrian entrance at the Clock Tower."
+    },
+    {
+      "name": "Area 931 Entrance (SW)",
+      "lat": 35.4702,
+      "lon": -86.0548,
+      "cat": "entrance",
+      "emoji": "🚪",
+      "desc": "Southwest pedestrian entrance to Centeroo (approx.)."
+    },
+    {
+      "name": "East Toll & rideshare",
+      "lat": 35.4795,
+      "lon": -86.034,
+      "cat": "entrance",
+      "emoji": "🚗",
+      "desc": "Vehicle gate via Shedd Rd. Rideshare drop-off: 2465 New Bushy Branch Rd."
+    },
+    {
+      "name": "West Toll",
+      "lat": 35.48072,
+      "lon": -86.06111,
+      "cat": "entrance",
+      "emoji": "🚙",
+      "desc": "NW vehicle gate off New Bushy Branch Rd (approx.)."
+    },
+    {
+      "name": "Water refill — Tower",
+      "lat": 35.474,
+      "lon": -86.0516,
+      "cat": "water",
+      "desc": "Free filtered water by the Tower Entrance / Ferris wheel (approx.)."
+    },
+    {
+      "name": "Water refill — Fountain",
+      "lat": 35.4714,
+      "lon": -86.0511,
+      "cat": "water",
+      "desc": "Free filtered water just east of the Fountain (approx.)."
+    },
+    {
+      "name": "Water refill — Oasis",
+      "lat": 35.4737,
+      "lon": -86.0544,
+      "cat": "water",
+      "desc": "Free filtered water near The Oasis / The Other (approx.). Every Outeroo Plaza has one too."
+    },
+    {
+      "name": "Medical — What/Which",
+      "lat": 35.4692,
+      "lon": -86.0502,
+      "cat": "medical",
+      "desc": "24/7 medical between What and Which stages (approx.). Flag any staff or SafeFest yellow shirt."
+    },
+    {
+      "name": "Medical — This Tent",
+      "lat": 35.4717,
+      "lon": -86.0535,
+      "cat": "medical",
+      "desc": "Medical near the GA+ Lounge by This Tent (approx.)."
+    },
+    {
+      "name": "Medical — Arch/VIP",
+      "lat": 35.4725,
+      "lon": -86.0492,
+      "cat": "medical",
+      "desc": "Medical near the Arch Entrance / VIP area (approx.). Every Plaza also has 24-hr medical."
+    },
+    {
+      "name": "Vendor Village",
+      "lat": 35.4716,
+      "lon": -86.0522,
+      "cat": "food",
+      "emoji": "🍕",
+      "desc": "Main food row between the Fountain and Which Stage (approx.)."
+    },
+    {
+      "name": "Merch & lockers",
+      "lat": 35.4724,
+      "lon": -86.0489,
+      "cat": "food",
+      "emoji": "🛍️",
+      "desc": "Main merch, Rootique and rental lockers w/ charging, near the Arch (approx.)."
+    },
+    {
+      "name": "Bonnie Roo's Brews & Sports Bar",
+      "lat": 35.4734,
+      "lon": -86.05,
+      "cat": "food",
+      "emoji": "🍺",
+      "desc": "New for '26, in That Tent's old spot on the north edge (approx.)."
+    },
+    {
+      "name": "Restrooms — What Stage",
+      "lat": 35.4697,
+      "lon": -86.0495,
+      "cat": "utility",
+      "emoji": "🚻",
+      "desc": "Restroom + food cluster at the What field edge (approx.). Every stage has one nearby."
+    },
+    {
+      "name": "Restrooms — Which Stage",
+      "lat": 35.4699,
+      "lon": -86.0519,
+      "cat": "utility",
+      "emoji": "🚻",
+      "desc": "Restroom cluster near Which Stage (approx.)."
+    },
+    {
+      "name": "Restrooms — This Tent",
+      "lat": 35.4721,
+      "lon": -86.0537,
+      "cat": "utility",
+      "emoji": "🚻",
+      "desc": "Restroom cluster near This Tent / GA+ (approx.)."
+    },
+    {
+      "name": "Restrooms — The Other",
+      "lat": 35.474,
+      "lon": -86.0535,
+      "cat": "utility",
+      "emoji": "🚻",
+      "desc": "Restroom cluster near The Other (approx.)."
+    },
+    {
+      "name": "Charging & lockers",
+      "lat": 35.4723,
+      "lon": -86.049,
+      "cat": "utility",
+      "emoji": "🔌",
+      "desc": "Locker rentals with battery-pack swaps near the Arch (approx.). Free charging at every Plaza."
+    },
+    {
+      "name": "Coca-Cola Refresh Lounge",
+      "lat": 35.4708,
+      "lon": -86.0516,
+      "cat": "utility",
+      "emoji": "🧊",
+      "desc": "Shaded lounge between Which Stage and the Fountain, with water refill (approx.)."
+    },
+    {
+      "name": "The Woods",
+      "lat": 35.4718,
+      "lon": -86.044,
+      "cat": "camping",
+      "desc": "Shaded wooded camping east of Centeroo."
+    },
+    {
+      "name": "Plaza 1",
+      "lat": 35.47091,
+      "lon": -86.04518,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.)."
+    },
+    {
+      "name": "Plaza 2",
+      "lat": 35.47484,
+      "lon": -86.03971,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.). Home of the Why? Barn stage."
+    },
+    {
+      "name": "Plaza 3",
+      "lat": 35.47532,
+      "lon": -86.04588,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.). Home of the When? Barn stage."
+    },
+    {
+      "name": "Plaza 4",
+      "lat": 35.47478,
+      "lon": -86.05098,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.)."
+    },
+    {
+      "name": "Plaza 5",
+      "lat": 35.47658,
+      "lon": -86.06086,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.). Home of the Groop stage."
+    },
+    {
+      "name": "Plaza 6",
+      "lat": 35.47817,
+      "lon": -86.05841,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.). Community camps cluster here."
+    },
+    {
+      "name": "Plaza 7",
+      "lat": 35.47713,
+      "lon": -86.05251,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.). The Grove premium camping nearby."
+    },
+    {
+      "name": "Plaza 8",
+      "lat": 35.48076,
+      "lon": -86.04858,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.)."
+    },
+    {
+      "name": "Plaza 9",
+      "lat": 35.47991,
+      "lon": -86.04635,
+      "cat": "camping",
+      "emoji": "🛖",
+      "desc": "Free water, 24-hr medical & security, showers, charging, Wi-Fi (location approx.). Home of the Silent Disco."
+    },
+    {
+      "name": "General Store (east)",
+      "lat": 35.47512,
+      "lon": -86.04695,
+      "cat": "food",
+      "emoji": "🏪",
+      "desc": "Ice, water, beer, food, sundries — near Plaza 3 (approx.)."
+    },
+    {
+      "name": "General Store (west)",
+      "lat": 35.47423,
+      "lon": -86.05211,
+      "cat": "food",
+      "emoji": "🏪",
+      "desc": "Ice, water, beer, food, sundries — near Plaza 4 (approx.)."
+    },
+    {
+      "name": "SoloRoo",
+      "lat": 35.47877,
+      "lon": -86.05944,
+      "cat": "camping",
+      "desc": "Community camp for solo travelers (approx.)."
+    },
+    {
+      "name": "SoberRoo",
+      "lat": 35.47877,
+      "lon": -86.05606,
+      "cat": "camping",
+      "desc": "Sober community camp (approx.)."
+    },
+    {
+      "name": "FamilyRoo",
+      "lat": 35.47952,
+      "lon": -86.05941,
+      "cat": "camping",
+      "desc": "Family camping (approx.)."
+    },
+    {
+      "name": "The Beyond",
+      "lat": 35.47882,
+      "lon": -86.05707,
+      "cat": "camping",
+      "desc": "Community camp (approx.)."
+    },
+    {
+      "name": "Rideshare lot",
+      "lat": 35.48022,
+      "lon": -86.03169,
+      "cat": "entrance",
+      "emoji": "🚕",
+      "desc": "Pickup/drop-off outside the East Toll — 2465 New Bushy Branch Rd."
+    },
+    {
+      "name": "Day Parking",
+      "lat": 35.48134,
+      "lon": -86.05729,
+      "cat": "entrance",
+      "emoji": "🅿️",
+      "desc": "West Toll corridor. Opens 11 AM, no in-and-out (approx.)."
+    },
+    {
+      "name": "Old Highway Toll",
+      "lat": 35.47289,
+      "lon": -86.05994,
+      "cat": "entrance",
+      "emoji": "🚙",
+      "desc": "SW vehicle gate off US-41 (approx.)."
+    }
+  ]
+}

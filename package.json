@@ -1,0 +1,19 @@
+{
+  "name": "roo26",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.2",
+    "astro": "^6.1.10",
+    "leaflet": "^1.9.4",
+    "qrcode": "^1.5.4"
+  }
+}

@@ -1,0 +1,2091 @@
+---
+// _App.astro — the entire Roo '26 guide app, rendered as a standalone page.
+// Wrapper pages (index/map/plan/info.astro) pass the initial tab; client-side
+// pushState handles switching between them without a reload.
+interface Props {
+	tab?: 'schedule' | 'map' | 'plan' | 'trip' | 'info'
+	standalone?: boolean // true when building for roo26.alkem.dev (app at domain root)
+}
+const { tab = 'schedule', standalone = false } = Astro.props
+
+const titles: Record<string, string> = {
+	schedule: "Roo '26 — Bonnaroo 2026 Schedule & Set Times",
+	map: "Roo '26 — Interactive Bonnaroo 2026 Map",
+	plan: "Roo '26 — My Bonnaroo 2026 Plan",
+	trip: "Roo '26 — My Bonnaroo 2026 Trip Report",
+	info: "Roo '26 — Bonnaroo 2026 Survival Guide",
+}
+const title = titles[tab]
+const desc =
+	"Unofficial interactive guide to Bonnaroo 2026 (June 11–14, Manchester TN): full set times, live map with your location, water & medical stations, and a personal planner. Works great on your phone."
+---
+
+<!doctype html>
+<html lang="en" data-tab={tab}>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<title>{title}</title>
+		<meta name="description" content={desc} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={desc} />
+		<meta property="og:type" content="website" />
+		<meta property="og:image" content="https://cade.io/roo26-icon-512.png" />
+		<meta name="theme-color" content="#120d1d" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="Roo '26" />
+		<meta name="robots" content="index,follow" />
+		<link rel="manifest" href={standalone ? '/roo26-root.webmanifest' : '/roo26.webmanifest'} />
+		<link rel="apple-touch-icon" href="/roo26-icon-180.png" />
+		<link rel="icon" href="/roo26-icon-192.png" type="image/png" />
+	</head>
+
+	<body>
+		<header class="topbar">
+			<div class="brand">
+				<span class="brand-roo">ROO</span><span class="brand-yr">’26</span>
+				<span class="brand-sub">The Farm · Manchester, TN · Jun 11–14</span>
+			</div>
+			<div class="topbar-right">
+				<div class="live-pill" id="livePill">…</div>
+				<button class="help-btn" id="helpBtn" aria-label="Help & install">?</button>
+			</div>
+		</header>
+
+		<div class="wx-alert" id="wxAlert" hidden>
+			<span id="wxAlertText"></span>
+			<button id="wxAlertClose" aria-label="Dismiss alert">✕</button>
+		</div>
+
+		<main>
+			<!-- ════════════ SCHEDULE ════════════ -->
+			<section class="view" id="view-schedule">
+				<div class="day-tabs" id="dayTabs"></div>
+
+				<div class="sched-tools">
+					<input
+						type="search"
+						id="searchBox"
+						placeholder="Search artists…"
+						autocomplete="off"
+						enterkeyhint="search"
+					/>
+					<button class="tool-btn" id="nowJump" title="Jump to what's on now">Now</button>
+				</div>
+
+				<div class="chip-row" id="stageChips"></div>
+
+				<div class="now-strip" id="nowStrip" hidden>
+					<div class="now-strip-label">ON NOW</div>
+					<div class="now-strip-cards" id="nowCards"></div>
+				</div>
+
+				<div id="schedList" class="sched-list"></div>
+			</section>
+
+			<!-- ════════════ MAP ════════════ -->
+			<section class="view" id="view-map">
+				<div class="chip-row map-chips" id="poiChips"></div>
+				<div class="map-wrap">
+					<div id="map"></div>
+					<div class="map-fabs">
+						<button class="fab" id="fabOmap" title="Official festival map">📜</button>
+						<button class="fab" id="fabPin" title="Mark a camp or meetup spot">⛺</button>
+						<button class="fab" id="fabHome" title="Compass to your camp">🧭</button>
+						<button class="fab fab-locate" id="fabLocate" title="Show my location">📍</button>
+					</div>
+					<div class="map-banner" id="tentBanner" hidden>Tap the map to place the pin</div>
+				</div>
+				<div class="nearest" id="nearestPanel">
+					<div class="nearest-hint" id="nearestHint">
+						Tap 📍 to see your distance to every stage, water station and camp. Tap ⛺ to mark
+						your camp and friends' camps.
+					</div>
+					<div class="nearest-list" id="nearestList"></div>
+				</div>
+			</section>
+
+			<!-- ════════════ MY PLAN ════════════ -->
+			<section class="view" id="view-plan">
+				<div class="plan-head">
+					<h2>My Roo</h2>
+					<div class="plan-actions">
+						<button class="tool-btn" id="sharePlan">Share</button>
+						<button class="tool-btn" id="qrPlan" title="QR code of your plan">⊞ QR</button>
+						<button class="tool-btn" id="icsPlan">📅</button>
+						<button class="tool-btn tool-danger" id="clearPlan">Clear</button>
+					</div>
+				</div>
+				<div id="planBody"></div>
+			</section>
+
+			<!-- ════════════ TRIP REPORT ════════════ -->
+			<section class="view" id="view-trip">
+				<div class="plan-head">
+					<h2>Trip Report</h2>
+				</div>
+				<div id="tripBody"></div>
+			</section>
+
+			<!-- ════════════ INFO ════════════ -->
+			<section class="view" id="view-info">
+				<div class="weather-card" id="weatherCard">
+					<div class="weather-head">
+						<h2>Weather on the Farm</h2>
+						<span class="weather-src" id="weatherSrc">forecast</span>
+					</div>
+					<div class="weather-days" id="weatherDays">Loading forecast…</div>
+				</div>
+				<div id="infoBody">
+					<details class="info-sec" open>
+						<summary>⏰ Hours &amp; key times</summary>
+						<div class="sec-body">
+							<ul>
+								<li><b>Centeroo</b> opens Thu Jun 11 at <b>1 PM</b>, then runs <b>24 hours non-stop</b> until Sun ~10 PM.</li>
+								<li><b>Campground tollbooths</b>: open 8 AM daily — be <b>in line by 8 PM</b>. Campgrounds close Mon Jun 15 at noon.</li>
+								<li><b>Box office</b>: Coffee County Central High School (100 Red Raider Dr, Manchester), 8 AM–9 PM daily through Sunday. Will Call + wristband issues; original purchaser needs government ID.</li>
+								<li><b>1-day tickets</b> (new in '26): enter from 11 AM; must exit Centeroo by 8 AM the next day.</li>
+								<li><b>Re-entry</b>: unlimited between Centeroo and campgrounds (scan your wristband). Driving off-site costs a <b>$40 vehicle re-entry fee</b>. Day parking has <b>no</b> in-and-out.</li>
+								<li><b>Headliners</b> (per the official posters): Thu Skrillex 11 PM · Fri The Strokes 11 PM · Sat RÜFÜS DU SOL 11:10 PM · Sun Noah Kahan 9:30 PM closes the Farm.</li>
+								<li><b>Outeroo never sleeps</b>: plaza stages (Why, When, Groop, The Grove, Silent Disco) run late-night programming beyond the Centeroo grid in this app — check the boards at your Plaza.</li>
+							</ul>
+						</div>
+					</details>
+
+					<details class="info-sec">
+						<summary>🎒 What you can bring (Centeroo)</summary>
+						<div class="sec-body">
+							<h4>Bag policy — all bags searched</h4>
+							<ul>
+								<li><span class="ok">OK</span> Small bag / fanny pack <b>6″×9″ or less</b> (one pocket, doesn't need to be clear).</li>
+								<li><span class="ok">OK</span> Bigger bags only if <b>clear</b> and under <b>12″×6″×12″</b>.</li>
+								<li><span class="ok">OK</span> <b>Hydration packs</b> (CamelBak) — bring it <b>empty</b>; max 2 main + 1 small compartment. Free refills inside.</li>
+							</ul>
+							<h4>Allowed</h4>
+							<ul>
+								<li><span class="ok">✓</span> Empty reusable water bottles, misting fans, battery packs, binoculars</li>
+								<li><span class="ok">✓</span> <b>Non-aerosol</b> sunscreen — <span class="warn">3.4 oz or less</span> (strict; verify at gate)</li>
+								<li><span class="ok">✓</span> Blankets / towels to sit on; point-and-shoot cameras</li>
+								<li><span class="ok">✓</span> Totems ≤ 7 ft, ≤ 1″ diameter, light materials only</li>
+								<li><span class="ok">✓</span> Factory-sealed Naloxone (Narcan)</li>
+							</ul>
+							<h4>Banned in Centeroo</h4>
+							<ul>
+								<li><span class="no">✗</span> <b>Chairs of any kind</b>, coolers, umbrellas, hammocks</li>
+								<li><span class="no">✗</span> Outside food / drinks / alcohol; aerosols (incl. aerosol sunscreen)</li>
+								<li><span class="no">✗</span> Multi-pocket backpacks, selfie sticks / tripods / pro lenses</li>
+								<li><span class="no">✗</span> Wagons, bikes, scooters, skateboards, glow sticks, laser pointers</li>
+							</ul>
+							<p>
+								Final authority is the
+								<a href="https://support.bonnaroo.com/hc/en-us/articles/4402712374420-What-items-are-allowed-and-prohibited" target="_blank" rel="noopener">official allowed-items list</a> — it changes, and the gate decides.
+							</p>
+						</div>
+					</details>
+
+					<details class="info-sec">
+						<summary>⛺ Campground rules (Outeroo)</summary>
+						<div class="sec-body">
+							<ul>
+								<li><span class="ok">✓</span> Food and drinks at camp. Alcohol limits per person: 2 cases of beer, 2 boxes of wine (per car), 1× 1–1.75 L liquor (per car). <span class="no">No glass anywhere.</span></li>
+								<li><span class="ok">✓</span> Camp chairs, portable grills, full-size sunscreen, strollers</li>
+								<li><span class="ok">✓</span> One generator per vehicle (under 4 kW)</li>
+								<li><span class="no">✗</span> Kegs, ground fires, fireworks, drones, weapons, pets (service animals OK)</li>
+								<li>Camping is in lettered pods around <b>Plazas</b> — each Plaza has info, 24-hr medical + security, water, showers (~$7–10), general stores, charging, and Wi-Fi.</li>
+								<li>General stores sell ice, water, beer, food, batteries and sundries.</li>
+								<li>Community camps are back: SoloRoo, SoberRoo, FamilyRoo, The Beyond.</li>
+							</ul>
+						</div>
+					</details>
+
+					<details class="info-sec">
+						<summary>💧 Water, medical &amp; safety</summary>
+						<div class="sec-body">
+							<ul>
+								<li><b>Free filtered water</b> refill stations throughout Centeroo and at every Plaza — keep that bottle moving.</li>
+								<li><b>Medical tents</b>: in Centeroo and at every Plaza, staffed <b>24/7</b> (nurses, physicians, crisis counselors). Roaming medics in the crowd.</li>
+								<li>Need help fast? Grab any staff or a <b>SafeFest yellow shirt</b> (helping-hand logo) — or call 911 for true emergencies.</li>
+								<li>Narcan is allowed through the gates (factory-sealed). Crisis counselors are on site around the clock.</li>
+								<li><b>Heat plan</b>: highs near 90°F — electrolytes, shade breaks, wide-brim hat. Cooling spots are listed at the Accessibility Center; misting tent at Accessible Camping.</li>
+								<li><b>Storm plan</b>: listen for announcements on <b>Bonnaroo Radio 101.5 FM</b>, the Festiverse app push alerts, and @Bonnaroo. Friday + Sunday look stormy — know your nearest exit and your car's location.</li>
+							</ul>
+						</div>
+					</details>
+
+					<details class="info-sec">
+						<summary>🚗 Getting there &amp; around</summary>
+						<div class="sec-body">
+							<ul>
+								<li><b>From Nashville</b>: I-24 E to Exit 111B (TN-55 E). <b>From Chattanooga</b>: I-24 W to Exit 111.</li>
+								<li><b>Rideshare / drop-off</b>: use <b>2465 New Bushy Branch Rd, Manchester TN</b> (routes to the East Tollbooth). Rides back out are scarce — schedule your return in advance.</li>
+								<li><b>Day parking</b>: opens 11 AM, closes 6 AM next day, no in-and-out; cars left past 9 AM after validity may be towed.</li>
+								<li><b>Nashville shuttle</b>: official round-trips depart downtown twice daily, with a new closer drop-off for '26 — passes at bonnaroo.frontgatetickets.com.</li>
+								<li><b>Accessibility</b>: ADA shuttles, viewing platforms, Accessible Camping with misting tent. Contact access@bonnaroo.com.</li>
+							</ul>
+						</div>
+					</details>
+
+					<details class="info-sec">
+						<summary>💳 Money, phone &amp; lockers</summary>
+						<div class="sec-body">
+							<ul>
+								<li>The whole Farm is <b>cashless</b> — activate your wristband's tap-to-pay and link a card (PayPal/Venmo/credit/debit) with a PIN before you hit the lines. Problems → Box Office or any info booth.</li>
+								<li>ATMs exist on site but you shouldn't need cash.</li>
+								<li><b>Lockers</b> (Centeroo + camp) include unlimited charging-pack swaps — entertainmentlockers.com. Free first-come charging + Wi-Fi at every Plaza.</li>
+								<li><b>Cell tips</b>: networks crawl near stages — text instead of calling, pre-download maps and this page, and set a physical meetup spot with your crew.</li>
+								<li><b>Bonnaroo Radio 101.5 FM</b> carries on-site announcements.</li>
+							</ul>
+						</div>
+					</details>
+
+					<details class="info-sec">
+						<summary>🌱 What's new in 2026</summary>
+						<div class="sec-body">
+							<ul>
+								<li>After the 2025 flood cancellation: ~100+ acres of new grass, new drainage, reinforced runoff paths, 1M+ sq ft of new internal roads, and flood-prone campsites removed.</li>
+								<li>Camping entry now starts <b>Wednesday</b>; Thursday is a single-stage welcome party on What Stage (Skrillex).</li>
+								<li><b>That Tent moved into the What Stage field</b>; the Where? flying saucer moved inside Centeroo; Bonnie Roo's Brews &amp; Sports Bar takes That Tent's old spot.</li>
+								<li>New 1-day and 2-day passes.</li>
+							</ul>
+						</div>
+					</details>
+
+					<details class="info-sec">
+						<summary>🏆 Roo Quest & your festival buddy</summary>
+						<div class="sec-body">
+							<div id="petCard"></div>
+							<div id="questCard"></div>
+						</div>
+					</details>
+
+					<details class="info-sec">
+						<summary>🔗 Official links</summary>
+						<div class="sec-body">
+							<ul>
+								<li><a href="https://www.bonnaroo.com" target="_blank" rel="noopener">bonnaroo.com</a> · <a href="https://www.bonnaroo.com/guide" target="_blank" rel="noopener">official guide hub</a> · <a href="https://support.bonnaroo.com/hc/en-us" target="_blank" rel="noopener">FAQ</a></li>
+								<li><a href="https://support.bonnaroo.com/hc/en-us/articles/4402685420948-Centeroo-Outeroo-Maps" target="_blank" rel="noopener">Official Centeroo + Outeroo maps</a></li>
+								<li>Official app: <b>Festiverse</b> — <a href="https://festiverse.onelink.me/oyeq/r3mvo79k" target="_blank" rel="noopener">download (iOS/Android)</a></li>
+								<li><a href="https://www.instagram.com/bonnaroo/" target="_blank" rel="noopener">@bonnaroo on Instagram</a> · <a href="https://x.com/bonnaroo" target="_blank" rel="noopener">@Bonnaroo on X</a></li>
+								<li>info@bonnaroo.com · accessibility: access@bonnaroo.com</li>
+							</ul>
+						</div>
+					</details>
+				</div>
+				<footer class="app-foot">
+					<p>
+						Unofficial fan-made guide · not affiliated with Bonnaroo or C3 Presents. Verify
+						details at <a href="https://www.bonnaroo.com" target="_blank" rel="noopener">bonnaroo.com</a>.
+						Schedule data compiled June 2026 — set times can change; the official Bonnaroo app has
+						the final word.
+					</p>
+					<p>Built with ❤️ on <a href="/">cade.io</a>. Stay hydrated. Radiate positivity. 🌈</p>
+				</footer>
+			</section>
+		</main>
+
+		<nav class="bottombar">
+			<button class="nav-btn" data-nav="schedule"><span class="nav-ico">🎸</span>Schedule</button>
+			<button class="nav-btn" data-nav="map"><span class="nav-ico">🗺️</span>Map</button>
+			<button class="nav-btn" data-nav="plan"
+				><span class="nav-ico">⭐</span>My Roo<span class="nav-badge" id="favCount" hidden></span></button
+			>
+			<button class="nav-btn" data-nav="trip"><span class="nav-ico">📈</span>Trip</button>
+			<button class="nav-btn" data-nav="info"><span class="nav-ico">🧭</span>Guide</button>
+		</nav>
+
+		<!-- artist detail sheet -->
+		<div class="sheet-wrap" id="sheetWrap" hidden>
+			<div class="sheet">
+				<div class="sheet-img" id="sheetImg">
+					<button class="sheet-close" id="sheetClose" aria-label="Close">✕</button>
+				</div>
+				<div class="sheet-body">
+					<div class="sheet-title">
+						<h3 id="sheetArtist"></h3>
+						<span class="genre-tag big" id="sheetGenre"></span>
+					</div>
+					<p class="sheet-desc" id="sheetDesc"></p>
+					<p class="sheet-bio" id="sheetBio"></p>
+					<div class="sheet-links" id="sheetLinks"></div>
+					<p class="sheet-when"><span id="sheetWhen"></span> · <b id="sheetStage"></b></p>
+					<div class="sheet-actions">
+						<button class="sheet-btn" id="sheetGoing">☆ Add to My Roo</button>
+						<a class="sheet-btn sheet-spotify" id="sheetSpotify" href="#" target="_blank" rel="noopener">▶ Spotify</a>
+						<button class="sheet-btn" id="sheetMap">🗺️ Stage</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- pin creation sheet -->
+		<div class="sheet-wrap" id="pinSheetWrap" hidden>
+			<div class="sheet pin-sheet">
+				<div class="sheet-body">
+					<h3>Drop a pin</h3>
+					<p class="pin-hint">Mark your camp, your friends' camps, the car, a meetup spot…</p>
+					<div class="pin-emojis" id="pinEmojis"></div>
+					<input type="text" id="pinName" placeholder="Name it — “Jake's camp”, “our car”…" maxlength="40" />
+					<div class="sheet-actions">
+						<button class="sheet-btn sheet-primary" id="pinPlace">Tap map to place</button>
+						<button class="sheet-btn" id="pinHere">📍 Place at my location</button>
+						<button class="sheet-btn" id="pinCancel">Cancel</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- QR share: fullscreen, white for easy scanning in sunlight -->
+		<div class="qr-wrap" id="qrWrap" hidden>
+			<div class="qr-name" id="qrName"></div>
+			<canvas id="qrCanvas"></canvas>
+			<div class="qr-hint">Scan to open this plan — no app needed</div>
+			<button class="tool-btn qr-close" id="qrClose">Close</button>
+		</div>
+
+		<!-- take-me-home compass -->
+		<div class="compass-wrap" id="compassWrap" hidden>
+			<button class="omap-close compass-close" id="compassClose" aria-label="Close">✕</button>
+			<button class="compass-name" id="compassName"></button>
+			<div class="compass-arrow-box"><div class="compass-arrow" id="compassArrow">⬆</div></div>
+			<div class="compass-dist" id="compassDist"></div>
+			<div class="compass-hint" id="compassHint"></div>
+			<div class="compass-age" id="compassAge"></div>
+		</div>
+
+		<!-- official map viewer -->
+		<div class="omap-wrap" id="omapWrap" hidden>
+			<div class="omap-top">
+				<div class="omap-tabs" id="omapTabs">
+					<button data-omap="centeroo" class="active">Centeroo</button>
+					<button data-omap="outeroo">Campgrounds</button>
+				</div>
+				<button class="omap-close" id="omapClose" aria-label="Close">✕</button>
+			</div>
+			<div id="omapMap"></div>
+			<div class="omap-note" id="omapNote"></div>
+		</div>
+
+		<!-- help & install -->
+		<div class="sheet-wrap" id="helpWrap" hidden>
+			<div class="sheet help-sheet">
+				<div class="sheet-body">
+					<div class="help-head">
+						<h3>How to Roo with this app 🌈</h3>
+						<button class="sheet-close static" id="helpClose" aria-label="Close">✕</button>
+					</div>
+					<ul class="help-list">
+						<li><b>🎸 Schedule</b> — every Centeroo set with live <i>NOW</i> badges. Tap a set for the artist's photo, bio, socials, news and Spotify. Tap ☆ to save it to My Roo. Search looks at today first, then shows matches from other days below. Hit <b>Now</b> to jump to the current moment.</li>
+						<li><b>🗺️ Map</b> — satellite map of the Farm. 📍 live location + distance to every stage, water and medical (auto-reconnects when signal drops). ⛺ custom pins for camps and meetup spots. 🧭 a compass that points straight back to your camp at 2 AM. 📜 the official festival maps. Chips toggle 🌧️ live rain radar and ➤ your route — yellow arrows through today's ★ sets in order.</li>
+						<li><b>⭐ My Roo</b> — your plan, day by day: overlap warnings, 🚶 leave-by walking times between stages, 📅 export to your calendar for offline reminders. <b>Share</b> sends a link carrying your whole plan, or hit <b>⊞ QR</b> for a fullscreen code anyone can scan — no app needed. Friends' plans you open get saved with 🤝 overlap markers.</li>
+						<li><b>📈 Trip</b> — while 📍 is on, your wandering is logged <i>on your phone only</i>: miles walked, est. steps, hour-by-hour movement charts per day, and a 🐾 Tracks trail on the map. Your whole Roo, visualized.</li>
+						<li><b>🧭 Guide</b> — live forecast + storm alerts, gate rules, what you can bring, water/medical info, and official links.</li>
+						<li><b>Works offline-ish</b> — once loaded, the app and official maps keep working with no signal; only live tiles, radar and weather need a connection. Everything you save stays on your phone.</li>
+					</ul>
+					<div class="help-install">
+						<button class="sheet-btn sheet-primary" id="installBtn" hidden>📲 Install as an app</button>
+						<p id="iosInstall" hidden>
+							<b>Add to your home screen:</b> tap the Share button <span class="ios-share">⎋</span> in
+							Safari, then “Add to Home Screen”. You get a real app icon and full-screen mode.
+						</p>
+					</div>
+					<p class="help-foot">Unofficial &amp; fan-made. Set times can change — the official Festiverse app has the final word.</p>
+				</div>
+			</div>
+		</div>
+
+		<div class="toast" id="toast" hidden></div>
+
+		<script
+			is:inline
+			set:html={`window.ROO_WX_FALLBACK=[
+	{"name":"Thursday","temp":"89°F","short":"Sunny and hot","rain":2},
+	{"name":"Friday","temp":"87°F","short":"Showers & thunderstorms likely","rain":90},
+	{"name":"Saturday","temp":"86°F","short":"Fog early, then mostly sunny","rain":13},
+	{"name":"Sunday","temp":"83°F","short":"Showers & thunderstorms","rain":90}
+];`}
+		/>
+		<script src="./_app.js"></script>
+	</body>
+</html>
+
+<style is:global>
+	/* ───────────────────────── design tokens ───────────────────────── */
+	:root {
+		--bg: #120d1d;
+		--bg-2: #1c1530;
+		--bg-3: #271d42;
+		--line: #372a5e;
+		--txt: #f3effc;
+		--mut: #a99cc9;
+		--dim: #6f6293;
+		--roo-pink: #ff4f7b;
+		--roo-orange: #ffb02e;
+		--roo-green: #3ddc97;
+		--roo-blue: #46b3ff;
+		--roo-purple: #b08bff;
+		--live: #ff4f7b;
+		--rainbow: linear-gradient(90deg, #ff4f7b, #ffb02e, #3ddc97, #46b3ff, #b08bff);
+		--rad: 14px;
+		--topbar-h: 3.4rem;
+		--botbar-h: calc(3.6rem + env(safe-area-inset-bottom, 0px));
+	}
+	* {
+		box-sizing: border-box;
+		-webkit-tap-highlight-color: transparent;
+	}
+	[hidden] {
+		display: none !important;
+	}
+	html,
+	body {
+		margin: 0;
+		padding: 0;
+		height: 100%;
+	}
+	body {
+		background: var(--bg);
+		color: var(--txt);
+		font-family:
+			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+		font-size: 16px;
+		line-height: 1.45;
+		display: flex;
+		flex-direction: column;
+		min-height: 100dvh;
+		overscroll-behavior-y: none;
+	}
+	button {
+		font: inherit;
+		color: inherit;
+		background: none;
+		border: none;
+		cursor: pointer;
+	}
+	a {
+		color: var(--roo-blue);
+	}
+
+	/* ───────────────────────── chrome ───────────────────────── */
+	.topbar {
+		position: sticky;
+		top: 0;
+		z-index: 1000;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		height: var(--topbar-h);
+		padding: 0 0.9rem;
+		padding-top: env(safe-area-inset-top, 0px);
+		background: rgba(18, 13, 29, 0.92);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+		border-bottom: 1px solid var(--line);
+	}
+	.brand {
+		display: flex;
+		align-items: baseline;
+		gap: 0.3rem;
+		white-space: nowrap;
+		overflow: hidden;
+	}
+	.brand-roo {
+		font-weight: 900;
+		font-size: 1.35rem;
+		letter-spacing: 0.04em;
+		background: var(--rainbow);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	.brand-yr {
+		font-weight: 800;
+		font-size: 1.1rem;
+		color: var(--txt);
+	}
+	.brand-sub {
+		font-size: 0.68rem;
+		color: var(--dim);
+		text-overflow: ellipsis;
+		overflow: hidden;
+	}
+	.live-pill {
+		flex-shrink: 0;
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.03em;
+		padding: 0.3rem 0.65rem;
+		border-radius: 999px;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		color: var(--mut);
+	}
+	.live-pill.is-live {
+		color: #fff;
+		background: linear-gradient(90deg, #ff4f7b, #c43cff);
+		border-color: transparent;
+		animation: pulse 2.4s ease-in-out infinite;
+	}
+	@keyframes pulse {
+		50% {
+			opacity: 0.75;
+		}
+	}
+	.topbar-right {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		flex-shrink: 0;
+	}
+	.help-btn {
+		width: 1.9rem;
+		height: 1.9rem;
+		border-radius: 50%;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		color: var(--mut);
+		font-weight: 900;
+		font-size: 0.95rem;
+	}
+	.wx-alert {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.5rem 0.9rem;
+		background: linear-gradient(90deg, #8a1d2d, #b3541e);
+		color: #fff;
+		font-size: 0.8rem;
+		font-weight: 700;
+		line-height: 1.3;
+	}
+	.wx-alert span {
+		flex: 1;
+	}
+	.wx-alert button {
+		flex-shrink: 0;
+		font-size: 1rem;
+		color: rgba(255, 255, 255, 0.8);
+		padding: 0.2rem 0.4rem;
+	}
+
+	main {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		max-width: 760px;
+		margin: 0 auto;
+		padding-bottom: var(--botbar-h);
+	}
+	.view {
+		display: none;
+		flex-direction: column;
+		flex: 1;
+		padding: 0.75rem 0.8rem 1.5rem;
+	}
+	.view.active {
+		display: flex;
+	}
+	#view-map.active {
+		padding: 0.5rem 0 0;
+	}
+
+	.bottombar {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		z-index: 1000;
+		display: flex;
+		height: var(--botbar-h);
+		padding-bottom: env(safe-area-inset-bottom, 0px);
+		background: rgba(18, 13, 29, 0.95);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+		border-top: 1px solid var(--line);
+	}
+	.nav-btn {
+		position: relative;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.1rem;
+		font-size: 0.68rem;
+		font-weight: 600;
+		color: var(--dim);
+		transition: color 0.15s;
+	}
+	.nav-btn .nav-ico {
+		font-size: 1.25rem;
+		filter: grayscale(1) opacity(0.6);
+		transition: filter 0.15s, transform 0.15s;
+	}
+	.nav-btn.active {
+		color: var(--txt);
+	}
+	.nav-btn.active .nav-ico {
+		filter: none;
+		transform: translateY(-1px) scale(1.08);
+	}
+	.nav-badge {
+		position: absolute;
+		top: 0.35rem;
+		right: calc(50% - 1.55rem);
+		min-width: 1.05rem;
+		height: 1.05rem;
+		padding: 0 0.25rem;
+		border-radius: 999px;
+		background: var(--roo-pink);
+		color: #fff;
+		font-size: 0.62rem;
+		font-weight: 800;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	/* ───────────────────────── shared widgets ───────────────────────── */
+	.chip-row {
+		display: flex;
+		gap: 0.4rem;
+		overflow-x: auto;
+		padding: 0.15rem 0.1rem 0.5rem;
+		scrollbar-width: none;
+	}
+	.chip-row::-webkit-scrollbar {
+		display: none;
+	}
+	.chip {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.38rem 0.8rem;
+		border-radius: 999px;
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		color: var(--mut);
+		font-size: 0.8rem;
+		font-weight: 600;
+		transition: all 0.15s;
+	}
+	.chip .dot {
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 50%;
+		background: var(--chip-c, var(--mut));
+	}
+	.chip.active {
+		color: #14101f;
+		background: var(--chip-c, var(--txt));
+		border-color: transparent;
+	}
+	.chip.active .dot {
+		background: rgba(0, 0, 0, 0.35);
+	}
+	.tool-btn {
+		flex-shrink: 0;
+		padding: 0.45rem 0.9rem;
+		border-radius: 10px;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		color: var(--txt);
+		font-size: 0.85rem;
+		font-weight: 700;
+	}
+	.tool-btn:active {
+		transform: scale(0.97);
+	}
+	.tool-danger {
+		color: var(--roo-pink);
+	}
+	.toast {
+		position: fixed;
+		bottom: calc(var(--botbar-h) + 0.8rem);
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 2000;
+		max-width: min(92vw, 30rem);
+		padding: 0.6rem 1rem;
+		border-radius: 12px;
+		background: #2e2452;
+		border: 1px solid var(--line);
+		color: var(--txt);
+		font-size: 0.85rem;
+		font-weight: 600;
+		text-align: center;
+		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+		animation: toast-in 0.2s ease-out;
+	}
+	@keyframes toast-in {
+		from {
+			opacity: 0;
+			transform: translateX(-50%) translateY(0.5rem);
+		}
+	}
+
+	/* ───────────────────────── schedule ───────────────────────── */
+	.day-tabs {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 0.35rem;
+		padding-bottom: 0.6rem;
+	}
+	.day-tab {
+		padding: 0.5rem 0.2rem;
+		border-radius: 12px;
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		text-align: center;
+		line-height: 1.15;
+	}
+	.day-tab .d-lbl {
+		display: block;
+		font-weight: 800;
+		font-size: 0.95rem;
+	}
+	.day-tab .d-date {
+		display: block;
+		font-size: 0.65rem;
+		color: var(--dim);
+		font-weight: 600;
+	}
+	.day-tab.active {
+		background: var(--rainbow);
+		border-color: transparent;
+		color: #14101f;
+	}
+	.day-tab.active .d-date {
+		color: rgba(20, 16, 31, 0.7);
+	}
+	.day-tab.is-today:not(.active) {
+		border-color: var(--roo-pink);
+	}
+
+	.sched-tools {
+		display: flex;
+		gap: 0.5rem;
+		padding-bottom: 0.55rem;
+	}
+	#searchBox {
+		flex: 1;
+		min-width: 0;
+		padding: 0.5rem 0.9rem;
+		border-radius: 10px;
+		border: 1px solid var(--line);
+		background: var(--bg-2);
+		color: var(--txt);
+		font-size: 0.95rem;
+		outline: none;
+	}
+	#searchBox::placeholder {
+		color: var(--dim);
+	}
+	#searchBox:focus {
+		border-color: var(--roo-purple);
+	}
+
+	.now-strip {
+		margin-bottom: 0.6rem;
+		padding: 0.55rem 0.6rem 0.6rem;
+		border-radius: var(--rad);
+		background: linear-gradient(135deg, rgba(255, 79, 123, 0.16), rgba(176, 139, 255, 0.14));
+		border: 1px solid rgba(255, 79, 123, 0.45);
+	}
+	.now-strip-label {
+		font-size: 0.62rem;
+		font-weight: 900;
+		letter-spacing: 0.16em;
+		color: var(--roo-pink);
+		padding: 0 0.2rem 0.35rem;
+	}
+	.now-strip-cards {
+		display: flex;
+		gap: 0.45rem;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.now-strip-cards::-webkit-scrollbar {
+		display: none;
+	}
+	.now-card {
+		flex-shrink: 0;
+		max-width: 14rem;
+		padding: 0.45rem 0.7rem;
+		border-radius: 10px;
+		background: rgba(18, 13, 29, 0.65);
+		border-left: 3px solid var(--sc, var(--roo-pink));
+		text-align: left;
+	}
+	.now-card .nc-a {
+		display: block;
+		font-weight: 800;
+		font-size: 0.85rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.now-card .nc-s {
+		display: block;
+		font-size: 0.68rem;
+		color: var(--mut);
+		font-weight: 600;
+	}
+
+	.sched-group-h {
+		position: sticky;
+		top: var(--topbar-h);
+		z-index: 10;
+		padding: 0.5rem 0.2rem 0.3rem;
+		font-size: 0.72rem;
+		font-weight: 900;
+		letter-spacing: 0.12em;
+		color: var(--dim);
+		background: linear-gradient(var(--bg) 75%, transparent);
+	}
+	.set-row {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.55rem 0.65rem;
+		margin-bottom: 0.4rem;
+		border-radius: var(--rad);
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--sc, var(--line));
+		transition: opacity 0.2s;
+	}
+	.set-row.is-past {
+		opacity: 0.42;
+	}
+	.set-row.is-live {
+		background: linear-gradient(135deg, rgba(255, 79, 123, 0.14), var(--bg-2) 55%);
+		border-color: rgba(255, 79, 123, 0.55);
+		border-left-color: var(--sc, var(--roo-pink));
+	}
+	.set-time {
+		flex-shrink: 0;
+		width: 4.3rem;
+		text-align: center;
+		line-height: 1.2;
+	}
+	.set-time .st-s {
+		display: block;
+		font-weight: 800;
+		font-size: 0.92rem;
+	}
+	.set-time .st-e {
+		display: block;
+		font-size: 0.66rem;
+		color: var(--dim);
+		font-weight: 600;
+	}
+	.set-main {
+		flex: 1;
+		min-width: 0;
+	}
+	.set-artist {
+		font-weight: 800;
+		font-size: 1rem;
+		line-height: 1.25;
+		overflow-wrap: anywhere;
+	}
+	.set-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin-top: 0.12rem;
+		font-size: 0.7rem;
+		font-weight: 700;
+	}
+	.stage-tag {
+		color: var(--sc, var(--mut));
+		letter-spacing: 0.06em;
+	}
+	.day-tag {
+		color: #14101f;
+		background: var(--roo-purple);
+		border-radius: 5px;
+		padding: 0.05rem 0.35rem;
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+	}
+	.empty-note.slim {
+		padding: 0.8rem 1rem 0.2rem;
+	}
+	/* ── trip report ── */
+	.trip-stats {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 0.45rem;
+		margin-bottom: 0.5rem;
+	}
+	.trip-stat {
+		padding: 0.6rem 0.3rem;
+		border-radius: var(--rad);
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+	.trip-stat b {
+		font-size: 1.02rem;
+		background: var(--rainbow);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	.trip-stat span {
+		font-size: 0.64rem;
+		color: var(--dim);
+		font-weight: 700;
+	}
+	.trip-day-meta {
+		color: var(--mut);
+		font-size: 0.78rem;
+		font-weight: 600;
+		margin-bottom: 0.4rem;
+	}
+	.trip-bars {
+		display: flex;
+		align-items: flex-end;
+		gap: 2px;
+		height: 5.2rem;
+		padding: 0.4rem 0.2rem 0;
+		border-radius: 10px;
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+	}
+	.trip-bar {
+		flex: 1;
+		border-radius: 3px 3px 0 0;
+		background: var(--roo-blue);
+		opacity: 0.85;
+		min-height: 2px;
+	}
+	.trip-bar.peak {
+		background: var(--roo-pink);
+	}
+	.trip-axis {
+		display: flex;
+		justify-content: space-between;
+		padding: 0.15rem 0.2rem 0.6rem;
+		font-size: 0.62rem;
+		color: var(--dim);
+		font-weight: 700;
+	}
+	.trip-foot {
+		margin-top: 1rem;
+		color: var(--dim);
+		font-size: 0.78rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		align-items: flex-start;
+	}
+	.genre-tag {
+		color: var(--dim);
+		font-weight: 600;
+		font-size: 0.68rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.genre-tag.big {
+		font-size: 0.78rem;
+		color: var(--roo-purple);
+		background: rgba(176, 139, 255, 0.12);
+		border: 1px solid rgba(176, 139, 255, 0.35);
+		border-radius: 999px;
+		padding: 0.15rem 0.6rem;
+	}
+	.live-tag {
+		color: #fff;
+		background: var(--live);
+		border-radius: 5px;
+		padding: 0.05rem 0.35rem;
+		font-size: 0.6rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		animation: pulse 2s infinite;
+	}
+	.fav-btn {
+		flex-shrink: 0;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		font-size: 1.25rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--dim);
+		transition: transform 0.12s;
+	}
+	.fav-btn:active {
+		transform: scale(1.25);
+	}
+	.fav-btn.faved {
+		color: var(--roo-orange);
+	}
+	.fav-btn.interested {
+		font-size: 1.05rem;
+	}
+	.set-row.is-interested {
+		opacity: 0.75;
+		border-style: dashed;
+	}
+	.walk-note {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin: -0.15rem 0 0.4rem;
+		padding: 0.3rem 0.65rem;
+		border-radius: 8px;
+		background: rgba(61, 220, 151, 0.1);
+		border: 1px dashed rgba(61, 220, 151, 0.4);
+		color: var(--roo-green);
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+	.walk-note.tight {
+		background: rgba(255, 176, 46, 0.12);
+		border-color: rgba(255, 176, 46, 0.45);
+		color: var(--roo-orange);
+	}
+	.friends-h {
+		margin-top: 1rem;
+	}
+	.friend-card {
+		position: relative;
+		margin-bottom: 0.45rem;
+		border-radius: var(--rad);
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		padding: 0.1rem 0.4rem;
+	}
+	.friend-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		width: calc(100% - 2rem);
+		padding: 0.55rem 0.4rem;
+		text-align: left;
+	}
+	.friend-name {
+		font-weight: 800;
+		font-size: 0.92rem;
+	}
+	.friend-meta {
+		color: var(--dim);
+		font-size: 0.72rem;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.friend-rm {
+		position: absolute;
+		top: 0.55rem;
+		right: 0.55rem;
+		color: var(--dim);
+		font-size: 0.85rem;
+		padding: 0.2rem 0.35rem;
+	}
+	.friend-sets {
+		padding: 0 0.5rem 0.6rem;
+	}
+	.friend-day {
+		font-size: 0.66rem;
+		font-weight: 900;
+		letter-spacing: 0.12em;
+		color: var(--roo-purple);
+		padding: 0.35rem 0 0.15rem;
+	}
+	.friend-set {
+		font-size: 0.8rem;
+		color: var(--mut);
+		padding: 0.12rem 0;
+	}
+	.both-tag {
+		color: var(--roo-green);
+		font-weight: 800;
+		font-size: 0.7rem;
+	}
+	.empty-note {
+		padding: 2.2rem 1rem;
+		text-align: center;
+		color: var(--dim);
+		font-size: 0.9rem;
+	}
+
+	/* ───────────────────────── map ───────────────────────── */
+	.map-chips {
+		padding: 0.15rem 0.8rem 0.5rem;
+	}
+	.map-wrap {
+		position: relative;
+		flex: 1;
+		min-height: 46dvh;
+	}
+	#map {
+		position: absolute;
+		inset: 0;
+		background: #0c1410;
+	}
+	.map-fabs {
+		position: absolute;
+		right: 0.7rem;
+		bottom: 1rem;
+		z-index: 800;
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+	}
+	.fab {
+		width: 2.9rem;
+		height: 2.9rem;
+		border-radius: 50%;
+		background: rgba(18, 13, 29, 0.92);
+		border: 1px solid var(--line);
+		font-size: 1.25rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+	}
+	.fab:active {
+		transform: scale(0.94);
+	}
+	.fab.on {
+		border-color: var(--roo-blue);
+		box-shadow: 0 0 0 2px rgba(70, 179, 255, 0.4);
+	}
+	.map-banner {
+		position: absolute;
+		top: 0.7rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 800;
+		padding: 0.45rem 0.9rem;
+		border-radius: 999px;
+		background: rgba(255, 176, 46, 0.95);
+		color: #14101f;
+		font-size: 0.8rem;
+		font-weight: 800;
+		white-space: nowrap;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+	}
+	.nearest {
+		background: var(--bg-2);
+		border-top: 1px solid var(--line);
+		padding: 0.55rem 0.8rem 0.7rem;
+		max-height: 32dvh;
+		overflow-y: auto;
+	}
+	.nearest-hint {
+		font-size: 0.78rem;
+		color: var(--dim);
+		text-align: center;
+		padding: 0.2rem;
+	}
+	.near-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.35rem 0.15rem;
+		border-bottom: 1px solid rgba(55, 42, 94, 0.5);
+		font-size: 0.85rem;
+	}
+	.near-row:last-child {
+		border-bottom: none;
+	}
+	.near-ico {
+		flex-shrink: 0;
+		width: 1.5rem;
+		text-align: center;
+	}
+	.near-name {
+		flex: 1;
+		min-width: 0;
+		font-weight: 700;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.near-dist {
+		flex-shrink: 0;
+		font-weight: 800;
+		color: var(--roo-green);
+		font-variant-numeric: tabular-nums;
+	}
+	.near-walk {
+		flex-shrink: 0;
+		font-size: 0.7rem;
+		color: var(--dim);
+		width: 4.2rem;
+		text-align: right;
+	}
+
+	/* leaflet skin + markers (created by JS, so must be global) */
+	.leaflet-container {
+		font: inherit;
+	}
+	.leaflet-control-attribution {
+		background: rgba(18, 13, 29, 0.7) !important;
+		color: var(--dim) !important;
+		font-size: 0.6rem !important;
+	}
+	.leaflet-control-attribution a {
+		color: var(--mut) !important;
+	}
+	.leaflet-popup-content-wrapper,
+	.leaflet-popup-tip {
+		background: var(--bg-3);
+		color: var(--txt);
+	}
+	.leaflet-popup-content {
+		margin: 0.7rem 0.9rem;
+		font-size: 0.85rem;
+		line-height: 1.4;
+	}
+	.poi-pin {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		background: var(--pc, #555);
+		border: 2px solid rgba(255, 255, 255, 0.85);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+		font-size: 0.95rem;
+	}
+	.poi-pin.poi-stage {
+		font-size: 1.05rem;
+	}
+	.poi-lbl {
+		background: rgba(18, 13, 29, 0.82) !important;
+		border: 1px solid var(--line) !important;
+		border-radius: 7px !important;
+		color: var(--txt) !important;
+		font-size: 0.68rem !important;
+		font-weight: 800 !important;
+		padding: 0.1rem 0.4rem !important;
+		box-shadow: none !important;
+	}
+	.poi-lbl::before {
+		display: none !important;
+	}
+	.map-zoomed-out .poi-lbl.lbl-minor {
+		display: none;
+	}
+	.user-dot {
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		background: #46b3ff;
+		border: 3px solid #fff;
+		box-shadow: 0 0 0 6px rgba(70, 179, 255, 0.35), 0 2px 10px rgba(0, 0, 0, 0.6);
+	}
+	.crew-dot {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		background: rgba(61, 220, 151, 0.9);
+		border: 2px solid #fff;
+		font-size: 0.9rem;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+	}
+	.crew-dot.stale {
+		filter: grayscale(0.8);
+		opacity: 0.7;
+	}
+	.camp-pin {
+		font-size: 1.7rem;
+		filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+	}
+	.route-arrow {
+		color: #ffe66d;
+		font-size: 1.1rem;
+		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+	}
+	.route-step {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		background: rgba(255, 230, 109, 0.92);
+		color: #14101f;
+		font-size: 0.66rem;
+		font-weight: 900;
+		border-radius: 999px;
+		padding: 0.08rem 0.4rem;
+		white-space: nowrap;
+		box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+	}
+	.route-step span {
+		font-weight: 700;
+	}
+	.qr-wrap {
+		position: fixed;
+		inset: 0;
+		z-index: 3200;
+		background: #fff;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
+		padding: 1.5rem;
+	}
+	.qr-name {
+		color: #14101f;
+		font-size: 1.3rem;
+		font-weight: 900;
+		text-align: center;
+	}
+	#qrCanvas {
+		width: min(78vw, 24rem) !important;
+		height: auto !important;
+		image-rendering: pixelated;
+	}
+	.qr-hint {
+		color: #5a5470;
+		font-size: 0.9rem;
+		font-weight: 600;
+		text-align: center;
+	}
+	.qr-close {
+		background: #14101f;
+		border-color: #14101f;
+		color: #fff;
+	}
+	.compass-wrap {
+		position: fixed;
+		inset: 0;
+		z-index: 3000;
+		background: radial-gradient(circle at 50% 38%, #221a3e, #0b0814 70%);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.7rem;
+	}
+	.compass-close {
+		position: absolute;
+		top: calc(0.9rem + env(safe-area-inset-top, 0px));
+		right: 0.9rem;
+	}
+	.compass-name {
+		font-size: 1.15rem;
+		font-weight: 900;
+		padding: 0.5rem 1.1rem;
+		border-radius: 999px;
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+	}
+	.compass-arrow-box {
+		width: min(58vw, 16rem);
+		height: min(58vw, 16rem);
+		border-radius: 50%;
+		border: 2px solid var(--line);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(28, 21, 48, 0.6);
+	}
+	.compass-arrow {
+		font-size: min(34vw, 9rem);
+		line-height: 1;
+		background: var(--rainbow);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+		transition: transform 0.3s ease-out;
+		will-change: transform;
+	}
+	.compass-dist {
+		font-size: 1.5rem;
+		font-weight: 900;
+		color: var(--roo-green);
+	}
+	.compass-hint {
+		color: var(--mut);
+		font-size: 0.85rem;
+		font-weight: 600;
+	}
+	.compass-age {
+		color: var(--dim);
+		font-size: 0.72rem;
+		min-height: 1em;
+	}
+	.user-dot.stale {
+		background: #8fa3ad;
+		box-shadow: 0 0 0 6px rgba(143, 163, 173, 0.3);
+	}
+	.pop-btn {
+		display: inline-block;
+		margin-top: 0.4rem;
+		padding: 0.3rem 0.7rem;
+		border-radius: 8px;
+		background: var(--roo-blue);
+		border: none;
+		color: #fff;
+		font-weight: 700;
+		font-size: 0.78rem;
+	}
+	.pop-btn-danger {
+		background: var(--roo-pink);
+	}
+	.pop-desc {
+		color: var(--mut);
+		font-size: 0.78rem;
+		margin-top: 0.15rem;
+	}
+	.pop-now {
+		margin-top: 0.35rem;
+		color: var(--roo-pink);
+		font-weight: 800;
+		font-size: 0.8rem;
+	}
+	.pop-next {
+		color: var(--mut);
+		font-size: 0.76rem;
+		font-weight: 600;
+	}
+
+	/* ── bottom sheets (artist detail / pin / help) ── */
+	.sheet-wrap {
+		position: fixed;
+		inset: 0;
+		z-index: 3000;
+		background: rgba(8, 5, 16, 0.65);
+		backdrop-filter: blur(3px);
+		-webkit-backdrop-filter: blur(3px);
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+	}
+	.sheet {
+		width: 100%;
+		max-width: 560px;
+		max-height: 88dvh;
+		overflow-y: auto;
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		border-bottom: none;
+		border-radius: 22px 22px 0 0;
+		animation: sheet-up 0.22s ease-out;
+	}
+	@keyframes sheet-up {
+		from {
+			transform: translateY(40px);
+			opacity: 0.5;
+		}
+	}
+	.sheet-img {
+		position: relative;
+		height: 11rem;
+		background: var(--bg-3) center/cover no-repeat;
+		border-radius: 22px 22px 0 0;
+	}
+	.sheet-img.no-img {
+		height: 3.2rem;
+	}
+	.sheet-img::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(transparent 40%, var(--bg-2));
+	}
+	.sheet-close {
+		position: absolute;
+		top: 0.6rem;
+		right: 0.6rem;
+		z-index: 2;
+		width: 2.1rem;
+		height: 2.1rem;
+		border-radius: 50%;
+		background: rgba(8, 5, 16, 0.6);
+		color: #fff;
+		font-size: 0.95rem;
+	}
+	.sheet-close.static {
+		position: static;
+		flex-shrink: 0;
+	}
+	.sheet-body {
+		padding: 0.4rem 1.1rem 1.3rem;
+	}
+	.sheet-title {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+	.sheet-title h3 {
+		margin: 0.3rem 0;
+		font-size: 1.35rem;
+		font-weight: 900;
+	}
+	.sheet-desc {
+		margin: 0.25rem 0 0.4rem;
+		color: var(--mut);
+		font-size: 0.92rem;
+	}
+	.sheet-bio {
+		margin: 0.1rem 0 0.5rem;
+		color: var(--mut);
+		font-size: 0.85rem;
+		line-height: 1.5;
+	}
+	.sheet-links {
+		display: flex;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+		margin: 0.1rem 0 0.7rem;
+	}
+	.link-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.3rem 0.7rem;
+		border-radius: 999px;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		color: var(--mut);
+		font-size: 0.74rem;
+		font-weight: 700;
+		text-decoration: none;
+		max-width: 100%;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	/* ── pet + quest ── */
+	.pet-box {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+		margin-bottom: 0.7rem;
+		padding: 0.6rem 0.8rem;
+		border-radius: var(--rad);
+		background: linear-gradient(135deg, rgba(176, 139, 255, 0.12), var(--bg-2) 60%);
+		border: 1px solid var(--line);
+	}
+	.pet-svg {
+		width: 3.6rem;
+		height: 3.6rem;
+		flex-shrink: 0;
+	}
+	.pet-svg svg {
+		width: 100%;
+		height: 100%;
+	}
+	.pet-happy .pet-svg {
+		animation: pet-bounce 2.2s ease-in-out infinite;
+	}
+	.pet-party .pet-svg {
+		animation: pet-rave 0.5s ease-in-out infinite;
+	}
+	.pet-thirsty .pet-svg {
+		filter: saturate(0.45);
+		transform: rotate(6deg);
+	}
+	.pet-parched .pet-svg {
+		filter: grayscale(0.9);
+		animation: pet-droop 3s ease-in-out infinite;
+	}
+	@keyframes pet-bounce {
+		50% {
+			transform: translateY(-4px);
+		}
+	}
+	@keyframes pet-rave {
+		25% {
+			transform: rotate(-8deg) scale(1.06);
+		}
+		75% {
+			transform: rotate(8deg) scale(1.06);
+		}
+	}
+	@keyframes pet-droop {
+		50% {
+			transform: rotate(10deg) translateY(2px);
+		}
+	}
+	.pet-info {
+		flex: 1;
+		min-width: 0;
+	}
+	.pet-name {
+		font-weight: 900;
+		font-size: 1rem;
+		padding: 0;
+	}
+	.pet-mood {
+		color: var(--mut);
+		font-size: 0.76rem;
+	}
+	.pet-badges {
+		font-size: 0.8rem;
+		margin-top: 0.15rem;
+		letter-spacing: 0.15em;
+	}
+	.pet-water {
+		flex-shrink: 0;
+		width: 2.6rem;
+		height: 2.6rem;
+		border-radius: 50%;
+		background: rgba(70, 179, 255, 0.15);
+		border: 1px solid rgba(70, 179, 255, 0.5);
+		font-size: 1.2rem;
+	}
+	.quest-box {
+		margin-top: 1rem;
+		padding: 0.75rem 0.9rem;
+		border-radius: var(--rad);
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+	}
+	.quest-head {
+		display: flex;
+		justify-content: space-between;
+		font-weight: 900;
+		font-size: 0.95rem;
+		margin-bottom: 0.45rem;
+	}
+	.quest-count {
+		color: var(--roo-orange);
+	}
+	.quest-bar {
+		height: 0.45rem;
+		border-radius: 999px;
+		background: var(--bg);
+		overflow: hidden;
+		margin-bottom: 0.55rem;
+	}
+	.quest-fill {
+		height: 100%;
+		background: var(--rainbow);
+		border-radius: 999px;
+		transition: width 0.4s;
+	}
+	.quest-row {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		padding: 0.32rem 0;
+		font-size: 0.84rem;
+		color: var(--txt);
+	}
+	.quest-row.done .q-label {
+		color: var(--dim);
+		text-decoration: line-through;
+	}
+	.q-check {
+		width: 1.5rem;
+		text-align: center;
+		flex-shrink: 0;
+	}
+	.q-label {
+		flex: 1;
+	}
+	.q-hint {
+		color: var(--roo-green);
+		font-size: 0.7rem;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.quest-tip {
+		margin-top: 0.4rem;
+		color: var(--dim);
+		font-size: 0.7rem;
+	}
+	.quest-won {
+		margin-top: 0.5rem;
+		text-align: center;
+		font-weight: 800;
+		color: var(--roo-orange);
+		animation: pulse 1.6s infinite;
+	}
+	.sheet-when {
+		margin: 0.2rem 0 0.8rem;
+		color: var(--mut);
+		font-size: 0.85rem;
+		font-weight: 600;
+	}
+	.sheet-actions {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+	.sheet-btn {
+		flex: 1;
+		min-width: 8rem;
+		text-align: center;
+		padding: 0.65rem 0.6rem;
+		border-radius: 12px;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		color: var(--txt);
+		font-weight: 800;
+		font-size: 0.88rem;
+		text-decoration: none;
+	}
+	.sheet-btn.faved {
+		color: var(--roo-orange);
+		border-color: rgba(255, 176, 46, 0.5);
+	}
+	.sheet-spotify {
+		background: #1db954;
+		border-color: transparent;
+		color: #06150b;
+	}
+	.sheet-primary {
+		background: var(--rainbow);
+		border-color: transparent;
+		color: #14101f;
+	}
+	/* pin sheet */
+	.pin-sheet h3,
+	.help-sheet h3 {
+		margin: 0.5rem 0 0.2rem;
+		font-size: 1.15rem;
+		font-weight: 900;
+	}
+	.pin-hint {
+		color: var(--dim);
+		font-size: 0.82rem;
+		margin: 0.1rem 0 0.6rem;
+	}
+	.pin-emojis {
+		display: grid;
+		grid-template-columns: repeat(6, 1fr);
+		gap: 0.4rem;
+		margin-bottom: 0.7rem;
+	}
+	.pin-emoji {
+		font-size: 1.5rem;
+		padding: 0.45rem 0;
+		border-radius: 12px;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+	}
+	.pin-emoji.active {
+		border-color: var(--roo-orange);
+		box-shadow: 0 0 0 2px rgba(255, 176, 46, 0.4);
+	}
+	#pinName {
+		width: 100%;
+		padding: 0.6rem 0.85rem;
+		margin-bottom: 0.8rem;
+		border-radius: 10px;
+		border: 1px solid var(--line);
+		background: var(--bg);
+		color: var(--txt);
+		font-size: 0.95rem;
+		outline: none;
+	}
+	#pinName:focus {
+		border-color: var(--roo-purple);
+	}
+	/* help sheet */
+	.help-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
+	}
+	.help-list {
+		margin: 0.5rem 0;
+		padding-left: 1.1rem;
+		color: var(--mut);
+		font-size: 0.86rem;
+	}
+	.help-list li {
+		margin: 0.55rem 0;
+	}
+	.help-list b {
+		color: var(--txt);
+	}
+	.help-install {
+		margin-top: 0.8rem;
+	}
+	.help-install p {
+		color: var(--mut);
+		font-size: 0.84rem;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 0.6rem 0.8rem;
+	}
+	.ios-share {
+		display: inline-block;
+		transform: rotate(-90deg);
+		font-weight: 900;
+	}
+	.help-foot {
+		margin: 0.9rem 0 0;
+		color: var(--dim);
+		font-size: 0.72rem;
+		text-align: center;
+	}
+
+	/* ── official map viewer ── */
+	.omap-wrap {
+		position: fixed;
+		inset: 0;
+		z-index: 3000;
+		background: #0b0814;
+		display: flex;
+		flex-direction: column;
+	}
+	.omap-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
+		padding: 0.55rem 0.8rem;
+		padding-top: calc(0.55rem + env(safe-area-inset-top, 0px));
+		border-bottom: 1px solid var(--line);
+	}
+	.omap-tabs {
+		display: flex;
+		gap: 0.4rem;
+	}
+	.omap-tabs button {
+		padding: 0.4rem 0.95rem;
+		border-radius: 999px;
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		color: var(--mut);
+		font-weight: 700;
+		font-size: 0.85rem;
+	}
+	.omap-tabs button.active {
+		background: var(--rainbow);
+		border-color: transparent;
+		color: #14101f;
+	}
+	.omap-close {
+		width: 2.2rem;
+		height: 2.2rem;
+		border-radius: 50%;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		color: var(--txt);
+	}
+	#omapMap {
+		flex: 1;
+		background: #0b0814;
+	}
+	.omap-note {
+		padding: 0.45rem 0.9rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+		font-size: 0.74rem;
+		color: var(--roo-orange);
+		font-weight: 700;
+		text-align: center;
+		border-top: 1px solid var(--line);
+	}
+
+	/* ───────────────────────── plan ───────────────────────── */
+	.plan-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-bottom: 0.5rem;
+	}
+	.plan-head h2 {
+		margin: 0;
+		font-size: 1.25rem;
+		font-weight: 900;
+	}
+	.plan-actions {
+		display: flex;
+		gap: 0.45rem;
+	}
+	.plan-day-h {
+		padding: 0.8rem 0.2rem 0.35rem;
+		font-size: 0.78rem;
+		font-weight: 900;
+		letter-spacing: 0.12em;
+		color: var(--roo-purple);
+	}
+	.conflict-note {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin: -0.15rem 0 0.4rem;
+		padding: 0.3rem 0.65rem;
+		border-radius: 8px;
+		background: rgba(255, 176, 46, 0.14);
+		border: 1px solid rgba(255, 176, 46, 0.4);
+		color: var(--roo-orange);
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+
+	/* ───────────────────────── info ───────────────────────── */
+	.weather-card {
+		margin-bottom: 0.8rem;
+		padding: 0.8rem 0.9rem;
+		border-radius: var(--rad);
+		background: linear-gradient(150deg, #1d2a4a, #1c1530 70%);
+		border: 1px solid var(--line);
+	}
+	.weather-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+	}
+	.weather-head h2 {
+		margin: 0 0 0.4rem;
+		font-size: 1.02rem;
+		font-weight: 900;
+	}
+	.weather-src {
+		font-size: 0.62rem;
+		color: var(--dim);
+		font-weight: 700;
+		letter-spacing: 0.05em;
+	}
+	.weather-days {
+		display: flex;
+		gap: 0.45rem;
+		overflow-x: auto;
+		scrollbar-width: none;
+		font-size: 0.8rem;
+		color: var(--mut);
+	}
+	.weather-days::-webkit-scrollbar {
+		display: none;
+	}
+	.wx-day {
+		flex-shrink: 0;
+		min-width: 7.2rem;
+		padding: 0.5rem 0.6rem;
+		border-radius: 10px;
+		background: rgba(18, 13, 29, 0.55);
+		border: 1px solid var(--line);
+		line-height: 1.3;
+	}
+	.wx-day .wx-n {
+		font-weight: 800;
+		color: var(--txt);
+		font-size: 0.78rem;
+	}
+	.wx-day .wx-t {
+		font-weight: 900;
+		font-size: 1.05rem;
+		color: var(--txt);
+	}
+	.wx-day .wx-d {
+		font-size: 0.68rem;
+		color: var(--mut);
+	}
+	.wx-day .wx-r {
+		font-size: 0.68rem;
+		color: var(--roo-blue);
+		font-weight: 700;
+	}
+
+	.info-sec {
+		margin-bottom: 0.55rem;
+		border-radius: var(--rad);
+		background: var(--bg-2);
+		border: 1px solid var(--line);
+		overflow: hidden;
+	}
+	.info-sec summary {
+		list-style: none;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.8rem 0.9rem;
+		font-weight: 800;
+		font-size: 0.95rem;
+		cursor: pointer;
+		user-select: none;
+	}
+	.info-sec summary::-webkit-details-marker {
+		display: none;
+	}
+	.info-sec summary::after {
+		content: '▾';
+		margin-left: auto;
+		color: var(--dim);
+		transition: transform 0.2s;
+	}
+	.info-sec[open] summary::after {
+		transform: rotate(180deg);
+	}
+	.info-sec .sec-body {
+		padding: 0 0.95rem 0.9rem;
+		font-size: 0.88rem;
+		color: var(--mut);
+	}
+	.info-sec .sec-body h4 {
+		margin: 0.9rem 0 0.25rem;
+		font-size: 0.8rem;
+		color: var(--txt);
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.info-sec .sec-body ul {
+		margin: 0.3rem 0;
+		padding-left: 1.15rem;
+	}
+	.info-sec .sec-body li {
+		margin: 0.22rem 0;
+	}
+	.info-sec .sec-body p {
+		margin: 0.4rem 0;
+	}
+	.ok {
+		color: var(--roo-green);
+		font-weight: 700;
+	}
+	.no {
+		color: var(--roo-pink);
+		font-weight: 700;
+	}
+	.warn {
+		color: var(--roo-orange);
+		font-weight: 700;
+	}
+	.app-foot {
+		margin-top: 1.4rem;
+		padding: 0 0.3rem;
+		font-size: 0.72rem;
+		color: var(--dim);
+		text-align: center;
+	}
+
+	@media (min-width: 700px) {
+		.view {
+			padding-left: 0;
+			padding-right: 0;
+		}
+		#view-map.active {
+			padding: 0.5rem 0 0;
+		}
+		.map-wrap {
+			min-height: 56dvh;
+			border-radius: var(--rad);
+			overflow: hidden;
+		}
+	}
+</style>
