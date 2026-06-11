@@ -1,21 +1,19 @@
-// roo26-sw.js — tiny offline helper for cade.io/roo26.
+// roo26-sw.js — tiny offline helper for roo26.alkem.dev.
 // Cell service on the Farm is rough: network-first for pages (so updates land
 // when there IS signal), cache-fallback when there isn't. Built assets and the
 // official festival maps are cached so the app + maps work with zero signal.
-// serves both cade.io/roo26 and the standalone roo26.alkem.dev
-const BASE = self.location.hostname.startsWith('roo26.') ? '' : '/roo26'
-const CACHE = 'roo26-v5'
+const BASE = ''
+const CACHE = 'roo26-v6'
 const PRECACHE = [
-	BASE + '/',
-	BASE + '/map',
-	BASE + '/plan',
-	BASE + '/trip',
-	BASE + '/info',
+	'/',
+	'/map',
+	'/plan',
+	'/info',
 	'/roo26-map-centeroo.webp',
 	'/roo26-map-outeroo.webp',
 	'/roo26-icon-192.png',
 	'/roo26-icon-512.png',
-	'/roo26.webmanifest',
+	'/roo26-root.webmanifest',
 ]
 
 self.addEventListener('install', (e) => {

@@ -5,9 +5,7 @@ full schedule with set times, an interactive satellite map with researched GPS
 data, a personal planner with shareable URL-encoded plans + QR codes, passive
 trip tracking, live NWS weather/alerts, offline support, and a few easter eggs.
 
-Deployed at **https://roo26.alkem.dev**. Ported from `cadebrown/cade.io`
-(originally served at https://cade.io/roo26) — same app, served from the
-domain root.
+Deployed at **https://roo26.alkem.dev**, served from the domain root.
 
 ## Develop
 
@@ -78,6 +76,3 @@ once `/roo26-api/health` returns `{ok:true}`. No code change required.
 - **Times** are stored as local-CDT ISO without offset; epoch math appends
   `-05:00`. The "festival day" rolls over at 6 AM. Don't introduce `Date`
   timezone parsing.
-- **Origin-aware base path**: both `_app.js` and `roo26-sw.js` derive
-  `BASE = location.hostname.startsWith('roo26.') ? '' : '/roo26'`, so the same
-  code serves the subdomain root and `cade.io/roo26`.

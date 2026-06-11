@@ -1,5 +1,5 @@
-// _app.js — all client logic for the Roo '26 guide.
-// Bundled by Astro; shared by /roo26, /roo26/map, /roo26/plan, /roo26/info.
+// _app.js — all client logic for the Roo '26 guide (roo26.alkem.dev).
+// Bundled by Astro; one script drives all routes (/, /map, /plan, /info).
 import SCHED from './_data/schedule.json'
 import POIS from './_data/pois.json'
 import ARTISTS from './_data/artists.json'
@@ -182,14 +182,13 @@ function setFav(set, on) {
 }
 
 // ───────────────────────── router ─────────────────────────
-// the app serves at cade.io/roo26 and standalone at roo26.alkem.dev
-const BASE = location.hostname.startsWith('roo26.') ? '' : '/roo26'
+// served from the domain root at roo26.alkem.dev
+const BASE = ''
 const TAB_PATH = {
-	schedule: BASE || '/',
-	map: `${BASE}/map`,
-	plan: `${BASE}/plan`,
-	trip: `${BASE}/trip`,
-	info: `${BASE}/info`,
+	schedule: '/',
+	map: '/map',
+	plan: '/plan',
+	info: '/info',
 }
 
 function setTab(tab, push = true) {
@@ -200,7 +199,6 @@ function setTab(tab, push = true) {
 		history.pushState({}, '', TAB_PATH[tab])
 	if (tab === 'map') initMap()
 	if (tab === 'plan') renderPlan()
-	if (tab === 'trip') renderTrip()
 	if (tab === 'info') {
 		loadWeather()
 		renderPet()
@@ -780,11 +778,11 @@ $('#icsPlan').addEventListener('click', () => {
 	const favs = SETS.filter((s) => favTier(s.id) > 0 && s.startMs)
 	if (!favs.length) return toast('Star some sets first!')
 	const utc = (ms) => new Date(ms).toISOString().replace(/[-:]|\.\d{3}/g, '')
-	let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//cade.io//roo26//EN\r\n'
+	let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//roo26.alkem.dev//roo26//EN\r\n'
 	for (const s of favs) {
 		ics +=
 			'BEGIN:VEVENT\r\n' +
-			`UID:${s.id}@cade.io\r\n` +
+			`UID:${s.id}@roo26.alkem.dev\r\n` +
 			`DTSTAMP:${utc(Date.now())}\r\n` +
 			`DTSTART:${utc(s.startMs)}\r\n` +
 			`DTEND:${utc(s.endMs || s.startMs + 3600e3)}\r\n` +
@@ -853,9 +851,14 @@ async function initMap() {
 	map = L.map('map', {
 		center: POIS.center,
 		zoom: 16,
+		// conservative limits so nobody accidentally zooms/pans off into the
+		// ocean and "breaks" the map: locked to the Farm, sensible zoom range.
+		minZoom: 14,
+		maxZoom: 19,
 		layers: [sat],
 		zoomControl: false,
-		maxBounds: L.latLngBounds(POIS.farmBounds).pad(0.6),
+		maxBounds: L.latLngBounds(POIS.farmBounds).pad(0.15),
+		maxBoundsViscosity: 0.85,
 		attributionControl: true,
 	})
 
@@ -1393,6 +1396,11 @@ function startLocate(auto = false) {
 	if (!auto) {
 		store.set('locate', true)
 		state.locatePref = true
+		// a real tap is our chance to ask iOS for compass-heading permission,
+		// so the on-map "you" arrow can show which way you're facing
+		requestOrientationPerm().then(startOrientation)
+	} else {
+		startOrientation()
 	}
 	let hadFix = !!state.pos
 	watchId = navigator.geolocation.watchPosition(
@@ -1470,7 +1478,7 @@ function drawUser() {
 		userMarker = L.marker(ll, {
 			icon: L.divIcon({
 				className: '',
-				html: '<div class="user-dot"></div>',
+				html: '<div class="user-dot"><div class="user-head"></div></div>',
 				iconSize: [18, 18],
 				iconAnchor: [9, 9],
 			}),
@@ -1487,6 +1495,19 @@ function drawUser() {
 		userCircle.setLatLng(ll).setRadius(state.pos.acc)
 	}
 	userMarker.getElement()?.querySelector('.user-dot')?.classList.remove('stale')
+	paintUserHeading()
+}
+
+// rotate the little arrow on the "you" dot to the way you're facing
+function paintUserHeading() {
+	const head = userMarker?.getElement()?.querySelector('.user-head')
+	if (!head) return
+	if (deviceHeading == null) {
+		head.style.opacity = '0'
+		return
+	}
+	head.style.opacity = '1'
+	head.style.transform = `rotate(${deviceHeading}deg)`
 }
 
 function renderNearest() {
@@ -1507,24 +1528,88 @@ function renderNearest() {
 		.sort((a, b) => a.dist - b.dist)
 		.slice(0, 9)
 	list.replaceChildren(
-		...rows.map((r) =>
-			el(
+		...rows.map((r) => {
+			const row = el(
 				'div',
-				{ class: 'near-row' },
+				{ class: 'near-row', role: 'button', tabindex: '0' },
 				el('span', { class: 'near-ico' }, r.emoji || POI_CATS[r.cat]?.emoji || '📍'),
 				el('span', { class: 'near-name' }, r.name),
 				el('span', { class: 'near-dist' }, fmtDist(r.dist)),
 				el('span', { class: 'near-walk' }, fmtWalk(r.dist)),
-			),
-		),
+			)
+			const go = () => focusPlace(r)
+			row.addEventListener('click', go)
+			row.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') go()
+			})
+			return row
+		}),
 	)
+}
+
+// fly to a place and drop a brief arrow + line from you to it, so tapping a
+// row in the nearest list actually shows you where it is on the map
+let focusLayer = null
+let focusTimer = null
+function focusPlace(t) {
+	if (!map) return
+	map.flyTo([t.lat, t.lon], Math.max(map.getZoom(), 17))
+	if (focusLayer) focusLayer.remove()
+	clearTimeout(focusTimer)
+	focusLayer = L.layerGroup().addTo(map)
+	L.marker([t.lat, t.lon], {
+		interactive: false,
+		zIndexOffset: 1600,
+		icon: L.divIcon({
+			className: '',
+			html: `<div class="focus-ping">${t.emoji || POI_CATS[t.cat]?.emoji || '📍'}</div>`,
+			iconSize: [38, 38],
+			iconAnchor: [19, 34],
+		}),
+	}).addTo(focusLayer)
+	if (state.pos)
+		L.polyline(
+			[
+				[state.pos.lat, state.pos.lon],
+				[t.lat, t.lon],
+			],
+			{ color: '#fff', weight: 2.5, opacity: 0.75, dashArray: '5 8' },
+		).addTo(focusLayer)
+	focusTimer = setTimeout(() => {
+		if (focusLayer) {
+			focusLayer.remove()
+			focusLayer = null
+		}
+	}, 7000)
+}
+
+// — device heading: one shared listener drives both the on-map "you" arrow and
+//   the full-screen guide compass. iOS needs a permission gesture first. —
+let deviceHeading = null
+let orientStarted = false
+function startOrientation() {
+	if (orientStarted) return
+	orientStarted = true
+	const onOrient = (e) => {
+		const v = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null)
+		if (v == null) return
+		deviceHeading = v
+		paintUserHeading()
+		if (!$('#compassWrap').hidden) paintCompass()
+	}
+	window.addEventListener('deviceorientationabsolute', onOrient)
+	window.addEventListener('deviceorientation', onOrient)
+}
+async function requestOrientationPerm() {
+	try {
+		if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission)
+			await DeviceOrientationEvent.requestPermission()
+	} catch {}
 }
 
 // — guide compass: point at any saved pin OR any place you tapped, 2 AM-proof —
 let compassTarget = 0
 let compassFocus = null // an arbitrary tapped place: {name, emoji, lat, lon} | null
-let headingHandler = null
-let lastHeading = null
 
 // what the compass can point at: the focused place (if any) first, then pins
 function compassTargets() {
@@ -1545,18 +1630,8 @@ async function openCompass(focus = null) {
 	$('#compassWrap').hidden = false
 	document.body.style.overflow = 'hidden'
 	if (watchId == null) startLocate(true)
-	// iOS requires an explicit permission request from a user gesture
-	try {
-		if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission)
-			await DeviceOrientationEvent.requestPermission()
-	} catch {}
-	lastHeading = null
-	headingHandler = (e) => {
-		lastHeading = e.webkitCompassHeading ?? (e.absolute && e.alpha != null ? 360 - e.alpha : null)
-		paintCompass()
-	}
-	window.addEventListener('deviceorientationabsolute', headingHandler)
-	window.addEventListener('deviceorientation', headingHandler)
+	await requestOrientationPerm()
+	startOrientation()
 	paintCompass()
 	if (compassTimer) clearInterval(compassTimer)
 	compassTimer = setInterval(paintCompass, 1000)
@@ -1568,7 +1643,7 @@ function paintCompass() {
 	const targets = compassTargets()
 	const t = targets[compassTarget % targets.length]
 	if (!t) return closeCompass()
-	const heading = lastHeading
+	const heading = deviceHeading
 	$('#compassName').textContent = `${t.emoji || '📍'} ${t.name}`
 	const cycle = $('#compassCycle')
 	cycle.hidden = targets.length < 2
@@ -1602,11 +1677,7 @@ function closeCompass() {
 	document.body.style.overflow = ''
 	clearInterval(compassTimer)
 	compassTimer = null
-	if (headingHandler) {
-		window.removeEventListener('deviceorientationabsolute', headingHandler)
-		window.removeEventListener('deviceorientation', headingHandler)
-		headingHandler = null
-	}
+	// leave the orientation listener running — it also drives the on-map arrow
 }
 
 $('#fabHome').addEventListener('click', () => openCompass())

@@ -3,28 +3,25 @@
 // Wrapper pages (index/map/plan/info.astro) pass the initial tab; client-side
 // pushState handles switching between them without a reload.
 interface Props {
-	tab?: 'schedule' | 'map' | 'plan' | 'trip' | 'info'
-	standalone?: boolean // true when building for roo26.alkem.dev (app at domain root)
+	tab?: 'schedule' | 'map' | 'plan' | 'info'
+	standalone?: boolean // app is served at the domain root (roo26.alkem.dev)
 }
-const { tab = 'schedule', standalone = false } = Astro.props
+const { tab = 'schedule' } = Astro.props
 
 const titles: Record<string, string> = {
 	schedule: "Roo '26 — Bonnaroo 2026 Schedule & Set Times",
 	map: "Roo '26 — Interactive Bonnaroo 2026 Map",
 	plan: "Roo '26 — My Bonnaroo 2026 Plan",
-	trip: "Roo '26 — My Bonnaroo 2026 Trip Report",
 	info: "Roo '26 — Bonnaroo 2026 Survival Guide",
 }
 const title = titles[tab]
 const desc =
 	"Unofficial interactive guide to Bonnaroo 2026 (June 11–14, Manchester TN): full set times, live map with your location, water & medical stations, and a personal planner. Works great on your phone."
 
-// Canonical home is roo26.alkem.dev (Astro.site). The standalone build emits
-// absolute canonical/OG URLs there so shared links resolve to the subdomain;
-// the cade.io copy keeps its own absolute image.
-const canonical = standalone && Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined
-const ogImage =
-	standalone && Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : 'https://cade.io/roo26-icon-512.png'
+// Canonical home is roo26.alkem.dev (Astro.site) — absolute canonical/OG URLs
+// so shared links always resolve to the subdomain.
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined
+const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '/roo26-icon-512.png'
 ---
 
 <!doctype html>
@@ -45,7 +42,7 @@ const ogImage =
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 		<meta name="apple-mobile-web-app-title" content="Roo '26" />
 		<meta name="robots" content="index,follow" />
-		<link rel="manifest" href={standalone ? '/roo26-root.webmanifest' : '/roo26.webmanifest'} />
+		<link rel="manifest" href="/roo26-root.webmanifest" />
 		<link rel="apple-touch-icon" href="/roo26-icon-180.png" />
 		<link rel="icon" href="/roo26-icon-192.png" type="image/png" />
 	</head>
@@ -127,14 +124,6 @@ const ogImage =
 					</div>
 				</div>
 				<div id="planBody"></div>
-			</section>
-
-			<!-- ════════════ TRIP REPORT ════════════ -->
-			<section class="view" id="view-trip">
-				<div class="plan-head">
-					<h2>Trip Report</h2>
-				</div>
-				<div id="tripBody"></div>
 			</section>
 
 			<!-- ════════════ INFO ════════════ -->
@@ -288,7 +277,7 @@ const ogImage =
 						Schedule data compiled June 2026 — set times can change; the official Bonnaroo app has
 						the final word.
 					</p>
-					<p>Built with ❤️ on <a href="/">cade.io</a>. Stay hydrated. Radiate positivity. 🌈</p>
+					<p>Built with ❤️ at <a href="https://alkem.dev" target="_blank" rel="noopener">alkem.dev</a>. Stay hydrated. Radiate positivity. 🌈</p>
 				</footer>
 			</section>
 		</main>
@@ -299,7 +288,6 @@ const ogImage =
 			<button class="nav-btn" data-nav="plan"
 				><span class="nav-ico">⭐</span>My Roo<span class="nav-badge" id="favCount" hidden></span></button
 			>
-			<button class="nav-btn" data-nav="trip"><span class="nav-ico">📈</span>Trip</button>
 			<button class="nav-btn" data-nav="info"><span class="nav-ico">🧭</span>Guide</button>
 		</nav>
 
@@ -1304,12 +1292,47 @@ const ogImage =
 		display: none;
 	}
 	.user-dot {
+		position: relative;
 		width: 100%;
 		height: 100%;
 		border-radius: 50%;
 		background: #46b3ff;
 		border: 3px solid #fff;
 		box-shadow: 0 0 0 6px rgba(70, 179, 255, 0.35), 0 2px 10px rgba(0, 0, 0, 0.6);
+	}
+	/* little arrow showing which way you're facing (device heading) */
+	.user-head {
+		position: absolute;
+		inset: 0;
+		transform-origin: 50% 50%;
+		opacity: 0;
+		transition: transform 0.2s ease-out, opacity 0.2s;
+		pointer-events: none;
+	}
+	.user-head::before {
+		content: '';
+		position: absolute;
+		top: -8px;
+		left: 50%;
+		transform: translateX(-50%);
+		border-left: 5px solid transparent;
+		border-right: 5px solid transparent;
+		border-bottom: 8px solid #fff;
+		filter: drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.5));
+	}
+	.focus-ping {
+		font-size: 1.8rem;
+		line-height: 1;
+		filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+		animation: focusbounce 0.6s ease-in-out infinite alternate;
+	}
+	@keyframes focusbounce {
+		from {
+			transform: translateY(0);
+		}
+		to {
+			transform: translateY(-6px);
+		}
 	}
 	.crew-dot {
 		display: flex;
