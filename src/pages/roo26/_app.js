@@ -70,10 +70,9 @@ function toast(msg) {
 
 // ───────────────────────── data prep ─────────────────────────
 const STAGES = Object.fromEntries(SCHED.stages.map((s) => [s.id, s]))
-// Festival area each stage lives in. For 2026 every stage moved inside
-// Centeroo (That Tent → What field, Where Stage → Centeroo); Outeroo is
-// camping/plazas/parking with no music stages. Kept as a map so it's a
-// one-line change if a campground stage ever returns.
+// Festival area each stage lives in. The six main stages are all in Centeroo
+// for 2026. Outeroo has its own Plaza stages (WHY/WHEN/GROOP/SILENT DISCO/THE
+// GROVE) + Snake & Jake's — add them here as their sets get transcribed.
 const STAGE_AREA = { what: 'centeroo', which: 'centeroo', this: 'centeroo', that: 'centeroo', other: 'centeroo', where: 'centeroo' }
 const SETS = SCHED.sets
 	.map((x) => {
@@ -386,7 +385,7 @@ function renderSched() {
 		const emptyMsg = state.search
 			? `No artists matching “${state.search}”.`
 			: state.stage === 'outeroo'
-				? 'No music stages in Outeroo this year — all sets are in Centeroo. Outeroo is camping, plazas & parking.'
+				? 'Outeroo lineup (Plaza stages, Silent Disco, The Grove & late-night parties) is coming to the app soon.'
 				: 'Nothing here yet.'
 		list.replaceChildren(el('div', { class: 'empty-note' }, emptyMsg))
 		return
@@ -1192,6 +1191,13 @@ function bearing(a, b) {
 	return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
 }
 
+// accumulate a continuous rotation so a CSS-transitioned arrow takes the SHORT
+// way across the 0°/360° seam (e.g. 359°→2° nudges +3°, not −357°)
+function shortRotate(prev, target) {
+	const delta = (((target - prev) % 360) + 540) % 360 - 180
+	return prev + delta
+}
+
 function drawRoute() {
 	if (!map || !routeLayer) return
 	routeLayer.clearLayers()
@@ -1475,6 +1481,7 @@ function drawUser() {
 	if (!map || !state.pos) return
 	const ll = [state.pos.lat, state.pos.lon]
 	if (!userMarker) {
+		userHeadCont = 0 // fresh element starts at 0deg; keep the accumulator in sync
 		userMarker = L.marker(ll, {
 			icon: L.divIcon({
 				className: '',
@@ -1499,6 +1506,7 @@ function drawUser() {
 }
 
 // rotate the little arrow on the "you" dot to the way you're facing
+let userHeadCont = 0
 function paintUserHeading() {
 	const head = userMarker?.getElement()?.querySelector('.user-head')
 	if (!head) return
@@ -1507,7 +1515,8 @@ function paintUserHeading() {
 		return
 	}
 	head.style.opacity = '1'
-	head.style.transform = `rotate(${deviceHeading}deg)`
+	userHeadCont = shortRotate(userHeadCont, deviceHeading)
+	head.style.transform = `rotate(${userHeadCont}deg)`
 }
 
 function renderNearest() {
@@ -1610,6 +1619,7 @@ async function requestOrientationPerm() {
 // — guide compass: point at any saved pin OR any place you tapped, 2 AM-proof —
 let compassTarget = 0
 let compassFocus = null // an arbitrary tapped place: {name, emoji, lat, lon} | null
+let compassArrowCont = 0 // continuous accumulated rotation (no 0/360 wrap spin)
 
 // what the compass can point at: the focused place (if any) first, then pins
 function compassTargets() {
@@ -1651,13 +1661,15 @@ function paintCompass() {
 	if (!state.pos) {
 		$('#compassDist').textContent = 'finding you…'
 		$('#compassArrow').style.transform = ''
+		compassArrowCont = 0 // keep accumulator in sync with the reset element
 		return
 	}
 	const dist = haversine(state.pos, t)
 	$('#compassDist').textContent = `${fmtDist(dist)} · ${fmtWalk(dist) || 'far'}`
 	const brg = bearing(state.pos, t)
 	const rot = heading == null ? brg : brg - heading
-	$('#compassArrow').style.transform = `rotate(${rot}deg)`
+	compassArrowCont = shortRotate(compassArrowCont, rot)
+	$('#compassArrow').style.transform = `rotate(${compassArrowCont}deg)`
 	$('#compassHint').textContent =
 		heading == null ? 'arrow points relative to north — hold phone flat' : 'follow the arrow'
 	const age = Math.round((Date.now() - state.pos.at) / 1000)
