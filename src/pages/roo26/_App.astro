@@ -78,9 +78,15 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 						enterkeyhint="search"
 					/>
 					<button class="tool-btn" id="nowJump" title="Jump to what's on now">Now</button>
+					<button class="tool-btn" id="hidePast" title="Hide sets that already ended" aria-pressed="false">Hide past</button>
 				</div>
 
 				<div class="chip-row" id="stageChips"></div>
+
+				<div class="now-strip upnext-strip" id="upNextStrip" hidden>
+					<div class="now-strip-label">⭐ UP NEXT FOR YOU</div>
+					<div class="now-strip-cards" id="upNextCards"></div>
+				</div>
 
 				<div class="now-strip" id="nowStrip" hidden>
 					<div class="now-strip-label">ON NOW</div>
@@ -706,6 +712,11 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	.tool-btn:active {
 		transform: scale(0.97);
 	}
+	.tool-btn.active {
+		background: var(--roo-green);
+		color: #0b0814;
+		border-color: transparent;
+	}
 	.tool-danger {
 		color: var(--roo-pink);
 	}
@@ -840,6 +851,32 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		font-size: 0.68rem;
 		color: var(--mut);
 		font-weight: 600;
+	}
+	/* now/up-next cards hold a tap-target body + a one-tap star */
+	.now-card {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		cursor: pointer;
+	}
+	.now-card .nc-main {
+		min-width: 0;
+		flex: 1;
+	}
+	.now-card .fav-btn {
+		flex-shrink: 0;
+	}
+	/* "up next for you" — green/star themed variant of the now strip */
+	.upnext-strip {
+		background: linear-gradient(135deg, rgba(61, 220, 151, 0.16), rgba(92, 225, 230, 0.14));
+		border-color: rgba(61, 220, 151, 0.45);
+	}
+	.upnext-strip .now-strip-label {
+		color: var(--roo-green);
+	}
+	.upnext-strip .nc-s .nc-when {
+		color: var(--roo-green);
+		font-weight: 800;
 	}
 
 	.sched-group-h {

@@ -134,6 +134,7 @@ const state = {
 	day: store.get('day', null) || currentFestDay() || SCHED.days[0].id,
 	stage: 'all',
 	search: '',
+	hidePast: store.get('hidepast', false), // declutter sets that already ended
 	favs: store.get('favs2', null), // {setId: 2 (going) | 1 (interested)}
 	friends: store.get('friends', []), // imported plans: [{name, going:[], interested:[], at}]
 	pins: store.get('pins', []), // [{id, emoji, name, lat, lon}] — camps & meetup spots
@@ -188,6 +189,7 @@ function setFav(set, on) {
 	else delete state.favs[set.id]
 	saveFavs()
 	renderFavCount()
+	renderUpNext()
 	if (state.tab === 'plan') renderPlan()
 	drawRoute()
 }
@@ -372,10 +374,13 @@ function renderStageChips() {
 
 function visibleSets() {
 	const q = state.search.trim().toLowerCase()
+	const now = Date.now()
 	return SETS.filter(
 		(s) =>
 			s.day === state.day &&
 			stageMatches(s) &&
+			// hide-past only applies when you're not searching (search should find anything)
+			(q || !state.hidePast || setStatus(s, now) !== 'past') &&
 			(!q || s.artist.toLowerCase().includes(q) || (s.info?.g || '').includes(q)),
 	)
 }
@@ -421,22 +426,57 @@ function renderSched() {
 	list.replaceChildren(frag)
 }
 
+// a horizontal card: tappable body (opens the sheet) + a one-tap ★
+function nowCard(s, ncs) {
+	const card = el(
+		'div',
+		{ class: 'now-card', style: `--sc:${s.stage.color}`, role: 'button', tabindex: '0' },
+		el('div', { class: 'nc-main' }, el('span', { class: 'nc-a' }, s.artist), ncs),
+		favButton(s),
+	)
+	card.addEventListener('click', () => openSheet(s))
+	card.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter') openSheet(s)
+	})
+	return card
+}
+
 function renderNowStrip() {
 	const now = Date.now()
 	const live = SETS.filter((s) => setStatus(s, now) === 'live')
 	const strip = $('#nowStrip')
 	strip.hidden = live.length === 0
-	if (!live.length) return
-	$('#nowCards').replaceChildren(
-		...live.map((s) => {
-			const c = el(
-				'button',
-				{ class: 'now-card', style: `--sc:${s.stage.color}` },
-				el('span', { class: 'nc-a' }, s.artist),
-				el('span', { class: 'nc-s' }, `${s.stage.name} · until ${s.end ? fmtTime(s.end) : '?'}`),
+	if (live.length)
+		$('#nowCards').replaceChildren(
+			...live.map((s) =>
+				nowCard(s, el('span', { class: 'nc-s' }, `${s.stage.name} · until ${s.end ? fmtTime(s.end) : '?'}`)),
+			),
+		)
+	renderUpNext(now)
+}
+
+// your starred sets starting within the next few hours, with a live countdown
+// (and walk time from your location when 📍 is on)
+function renderUpNext(now = Date.now()) {
+	const strip = $('#upNextStrip')
+	const upcoming = SETS.filter((s) => isFav(s.id) && s.startMs && s.startMs > now && s.startMs - now < 3 * 3600e3)
+		.sort((a, b) => a.startMs - b.startMs)
+		.slice(0, 5)
+	strip.hidden = upcoming.length === 0
+	if (!upcoming.length) return
+	$('#upNextCards').replaceChildren(
+		...upcoming.map((s) => {
+			const ncs = el(
+				'span',
+				{ class: 'nc-s' },
+				`${s.stage.name} · `,
+				el('span', { class: 'nc-when' }, untilLabel(s.startMs, now)),
 			)
-			c.addEventListener('click', () => openSheet(s))
-			return c
+			if (state.pos && STAGE_POI[s.stage.id]) {
+				const w = fmtWalk(haversine(state.pos, STAGE_POI[s.stage.id]))
+				if (w) ncs.append(` · ${w}`)
+			}
+			return nowCard(s, ncs)
 		}),
 	)
 }
@@ -478,6 +518,19 @@ $('#nowJump').addEventListener('click', () => {
 	if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' })
 	else toast('No upcoming sets on this day')
 })
+
+const hidePastBtn = $('#hidePast')
+const paintHidePast = () => {
+	hidePastBtn.classList.toggle('active', state.hidePast)
+	hidePastBtn.setAttribute('aria-pressed', String(state.hidePast))
+}
+hidePastBtn.addEventListener('click', () => {
+	state.hidePast = !state.hidePast
+	store.set('hidepast', state.hidePast)
+	paintHidePast()
+	renderSched()
+})
+paintHidePast()
 
 // ───────────────────────── artist detail sheet ─────────────────────────
 let sheetSet = null
@@ -929,6 +982,7 @@ async function initMap() {
 	})
 
 	renderPoiChips()
+	probeCrew()
 	setTimeout(() => map.invalidateSize(), 60)
 
 	// auto-locate: resume if the user had it on, or if permission is already granted
@@ -1051,15 +1105,21 @@ let crewAvailable = false
 let crew = store.get('crew', null) // {code, name}
 let crewLayer = null
 let crewTimer = null
+let crewProbed = false
 
-fetch('/roo26-api/health')
-	.then((r) => r.json())
-	.then((h) => {
-		crewAvailable = !!h.ok
-		if (crewAvailable) renderPoiChips()
-		if (crewAvailable && crew) startCrew()
-	})
-	.catch(() => {})
+// probe the backend the first time the map opens (not on every page load)
+function probeCrew() {
+	if (crewProbed) return
+	crewProbed = true
+	fetch('/roo26-api/health')
+		.then((r) => r.json())
+		.then((h) => {
+			crewAvailable = !!h.ok
+			if (crewAvailable) renderPoiChips()
+			if (crewAvailable && crew) startCrew()
+		})
+		.catch(() => {})
+}
 
 async function crewTap() {
 	if (crew) {
@@ -1786,11 +1846,13 @@ let weatherLoaded = false
 
 async function loadWeather() {
 	if (weatherLoaded) return
-	weatherLoaded = true
 	const box = $('#weatherDays')
 	try {
 		const cached = JSON.parse(sessionStorage.getItem('roo26:wx') || 'null')
-		if (cached && Date.now() - cached.at < 30 * 60e3) return renderWeather(cached.periods, 'NWS live')
+		if (cached && Date.now() - cached.at < 30 * 60e3) {
+			weatherLoaded = true
+			return renderWeather(cached.periods, 'NWS live')
+		}
 		const pt = await (await fetch(`https://api.weather.gov/points/${WX_POINT}`)).json()
 		const fc = await (await fetch(pt.properties.forecast)).json()
 		const periods = fc.properties.periods.slice(0, 8).map((p) => ({
@@ -1800,6 +1862,7 @@ async function loadWeather() {
 			rain: p.probabilityOfPrecipitation?.value ?? null,
 		}))
 		sessionStorage.setItem('roo26:wx', JSON.stringify({ at: Date.now(), periods }))
+		weatherLoaded = true // only latch success, so a failed first load retries when you revisit
 		renderWeather(periods, 'NWS live')
 	} catch {
 		if (window.ROO_WX_FALLBACK) renderWeather(window.ROO_WX_FALLBACK, 'cached forecast')
@@ -1890,9 +1953,22 @@ function logTrack() {
 	track.push([Math.round(now / 1000), +lat.toFixed(5), +lon.toFixed(5)])
 	// keep storage bounded: thin old points, keep recent ones dense
 	if (track.length > 15000) track = track.filter((_, i) => i % 2 === 0 || i > track.length - 2000)
-	store.set('track', track)
-	store.set('trackagg', trackAgg)
+	// persist at most every ~20s — serializing the whole array on every fix
+	// janks low-end phones over a long day (we still keep it all in memory)
+	if (now - lastTrackSave > 20e3) {
+		lastTrackSave = now
+		store.set('track', track)
+		store.set('trackagg', trackAgg)
+	}
 }
+let lastTrackSave = 0
+// flush the trail to storage when the app is backgrounded/closed so nothing's lost
+addEventListener('visibilitychange', () => {
+	if (document.hidden && track.length) {
+		store.set('track', track)
+		store.set('trackagg', trackAgg)
+	}
+})
 
 function renderTrip() {
 	const body = $('#tripBody')
