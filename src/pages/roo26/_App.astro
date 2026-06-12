@@ -492,7 +492,10 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		line-height: 1.45;
 		display: flex;
 		flex-direction: column;
-		min-height: 100dvh;
+		/* fixed-height app shell: bars are flow rows, main scrolls inside.
+		   keeps the bottom nav from ever floating away (iOS fixed-bar bug). */
+		height: 100dvh;
+		overflow: hidden;
 		overscroll-behavior-y: none;
 	}
 	button {
@@ -508,8 +511,7 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 
 	/* ───────────────────────── chrome ───────────────────────── */
 	.topbar {
-		position: sticky;
-		top: 0;
+		flex-shrink: 0;
 		z-index: 1000;
 		display: flex;
 		align-items: center;
@@ -611,12 +613,14 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 
 	main {
 		flex: 1;
+		min-height: 0; /* allow the flex child to actually scroll */
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
 		display: flex;
 		flex-direction: column;
 		width: 100%;
 		max-width: 760px;
 		margin: 0 auto;
-		padding-bottom: var(--botbar-h);
 	}
 	.view {
 		display: none;
@@ -632,10 +636,7 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	}
 
 	.bottombar {
-		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
+		flex-shrink: 0;
 		z-index: 1000;
 		display: flex;
 		height: var(--botbar-h);
@@ -920,7 +921,7 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 
 	.sched-group-h {
 		position: sticky;
-		top: var(--topbar-h);
+		top: 0;
 		z-index: 10;
 		padding: 0.5rem 0.2rem 0.3rem;
 		font-size: 0.72rem;

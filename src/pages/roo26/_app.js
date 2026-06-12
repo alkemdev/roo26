@@ -216,7 +216,8 @@ function setTab(tab, push = true) {
 		renderPet()
 		renderQuest()
 	}
-	window.scrollTo({ top: 0 })
+	// main is the scroll container (app-shell layout) — reset it, not the window
+	$('main')?.scrollTo({ top: 0 })
 }
 
 window.addEventListener('popstate', () => {
