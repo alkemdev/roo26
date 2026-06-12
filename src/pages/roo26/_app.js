@@ -971,13 +971,34 @@ const spApi = (access) => (path, opts = {}) => {
 	return fetch(`https://api.spotify.com/v1${path}`, { ...opts, headers })
 }
 
+// status popup so you can see the build progress (it takes a few seconds)
+function spShow() {
+	$('#spotifyOpen').hidden = true
+	$('#spotifyBarFill').style.width = '0%'
+	$('#spotifyWrap').hidden = false
+	document.body.style.overflow = 'hidden'
+}
+function spStatus(msg, pct) {
+	$('#spotifyStatus').textContent = msg
+	if (pct != null) $('#spotifyBarFill').style.width = `${Math.round(pct)}%`
+}
+function spClose() {
+	$('#spotifyWrap').hidden = true
+	document.body.style.overflow = ''
+}
+$('#spotifyClose').addEventListener('click', spClose)
+$('#spotifyWrap').addEventListener('click', (e) => {
+	if (e.target.id === 'spotifyWrap') spClose()
+})
+
 async function buildSpotifyPlaylist() {
 	if (!SPOTIFY_CLIENT_ID) return
 	const fav = SETS.filter((s) => isFav(s.id))
 	if (!fav.length) return toast('Star some sets first!')
 	const access = await spotifyToken()
-	if (!access) return spotifyAuth() // sign in, then resume on redirect
-	toast('Building your Spotify playlist…')
+	if (!access) return spotifyAuth() // sign in, then resume on redirect (no popup yet)
+	spShow()
+	spStatus('Finding your tracks…', 4)
 	try {
 		const api = spApi(access)
 		// unique artists from your plan ({id?, name}); dedupe by id or name
@@ -987,9 +1008,14 @@ async function buildSpotifyPlaylist() {
 		// are actually by them. Bonus: works for Outeroo DJs with no stored ID.
 		const uris = []
 		let authErr = false
-		for (const a of artists) {
+		for (let i = 0; i < artists.length; i++) {
+			const a = artists[i]
+			spStatus(`Finding tracks — ${i + 1}/${artists.length} artists…`, 4 + (i / artists.length) * 66)
 			const r = await api(`/search?q=${encodeURIComponent(`artist:"${a.name}"`)}&type=track&limit=10&market=US`)
-			if (r.status === 401) { authErr = true; break }
+			if (r.status === 401) {
+				authErr = true
+				break
+			}
 			if (!r.ok) continue
 			const items = (await r.json()).tracks?.items || []
 			const match = (t) =>
@@ -1000,10 +1026,11 @@ async function buildSpotifyPlaylist() {
 		}
 		if (authErr) {
 			store.del('spotify')
-			return toast('Spotify session expired — tap 🎵 to sign in again')
+			return spStatus('Spotify session expired — close this and tap 🎵 again to sign back in.', 0)
 		}
 		const dedup = [...new Set(uris)]
-		if (!dedup.length) return toast('Couldn’t find tracks for your artists')
+		if (!dedup.length) return spStatus('Couldn’t find tracks for your starred artists. Try again later.', 0)
+		spStatus('Creating your playlist…', 80)
 		const me = await (await api('/me')).json()
 		const pl = await (
 			await api(`/users/${me.id}/playlists`, {
@@ -1015,13 +1042,16 @@ async function buildSpotifyPlaylist() {
 				}),
 			})
 		).json()
+		spStatus(`Adding ${dedup.length} tracks…`, 90)
 		for (let i = 0; i < dedup.length; i += 100)
 			await api(`/playlists/${pl.id}/tracks`, { method: 'POST', body: JSON.stringify({ uris: dedup.slice(i, i + 100) }) })
-		toast(`🎵 Playlist ready — ${dedup.length} tracks!`)
-		window.open(pl.external_urls.spotify, '_blank')
+		spStatus(`✅ Done — ${dedup.length} tracks from ${artists.length} artists!`, 100)
+		const open = $('#spotifyOpen')
+		open.href = pl.external_urls.spotify
+		open.hidden = false
 		questFlag('share')
 	} catch {
-		toast('Spotify hiccup — try again')
+		spStatus('Spotify hiccup — close this and try again.', 0)
 	}
 }
 

@@ -370,6 +370,21 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 			</div>
 		</div>
 
+		<!-- Spotify playlist build status -->
+		<div class="sheet-wrap" id="spotifyWrap" hidden>
+			<div class="sheet pin-sheet">
+				<div class="sheet-body">
+					<h3>🎵 Spotify playlist</h3>
+					<p class="pin-hint" id="spotifyStatus">…</p>
+					<div class="sp-bar"><div class="sp-bar-fill" id="spotifyBarFill"></div></div>
+					<div class="sheet-actions">
+						<a class="sheet-btn sheet-primary" id="spotifyOpen" target="_blank" rel="noopener" hidden>Open in Spotify ↗</a>
+						<button class="sheet-btn" id="spotifyClose">Close</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<!-- Share hub: QR (white for sunlight scanning) + text-a-friend buttons -->
 		<div class="qr-wrap" id="qrWrap" hidden>
 			<div class="qr-name" id="qrName"></div>
@@ -1138,6 +1153,21 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		font-size: 0.72rem;
 		font-weight: 700;
 		color: #d9caff;
+	}
+	/* spotify build progress bar */
+	.sp-bar {
+		height: 8px;
+		border-radius: 999px;
+		background: var(--bg-3);
+		overflow: hidden;
+		margin: 0.7rem 0 0.3rem;
+	}
+	.sp-bar-fill {
+		height: 100%;
+		width: 0;
+		border-radius: 999px;
+		background: var(--roo-green);
+		transition: width 0.35s ease;
 	}
 	/* rich import preview list */
 	.import-list {
