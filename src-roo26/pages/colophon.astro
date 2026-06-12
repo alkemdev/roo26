@@ -86,6 +86,58 @@ const built = new Date().toISOString().slice(0, 10)
 			.callout.dec { border-left-color: var(--gld) }
 			.dl dt { font-weight: 700; color: #fff; margin-top: 0.7rem }
 			.dl dd { margin: 0.1rem 0 0; color: var(--mut); font-size: 0.9rem }
+			/* ── diagrams ── */
+			.diag { margin: 1.1rem 0 0.3rem }
+			.node { position: relative; background: linear-gradient(160deg, #1d1630, #181128); border: 1px solid var(--line); border-radius: 14px; padding: 0.75rem 0.95rem; transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s }
+			.node:hover { transform: translateY(-3px); border-color: #463879; box-shadow: 0 12px 28px rgba(124,92,255,0.18) }
+			.node .row { display: flex; align-items: center; gap: 0.6rem }
+			.node .ic { font-size: 1.15rem; flex: 0 0 auto }
+			.node b { display: block; font-size: 0.92rem }
+			.node span { color: var(--mut); font-size: 0.76rem }
+			.node.c-client { border-color: rgba(255,143,177,0.45) }
+			.node.c-edge { border-color: rgba(124,92,255,0.55); background: linear-gradient(160deg, #221a3e, #191230) }
+			.node.c-cron { border-color: rgba(255,209,102,0.45) }
+			.node.c-ext { border-color: rgba(61,220,151,0.4) }
+			.edge-hd { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap }
+			.edge-hd b { display: inline; font-size: 1rem }
+			.edge-hd .sub { color: var(--mut); font-size: 0.76rem }
+			.routes { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.65rem }
+			.route { font-family: var(--mono); font-size: 0.72rem; padding: 0.18rem 0.5rem; border-radius: 7px; background: #120c24; border: 1px solid var(--line); color: #c9b8ff }
+			.stores { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 0.7rem }
+			.stores .ic { display: block; margin-bottom: 0.15rem; font-size: 1.2rem }
+			.dual { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem }
+			@media (max-width: 560px) { .dual { grid-template-columns: 1fr } }
+			/* connectors (animated data-flow) */
+			.conn { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.4rem 0 }
+			.conn .lbls { display: flex; gap: 1.1rem; flex-wrap: wrap; justify-content: center }
+			.conn .l2 { font-family: var(--mono); font-size: 0.68rem; color: var(--mut) }
+			.conn .line { width: 2px; height: 20px; background: var(--line); border-radius: 2px; position: relative; overflow: hidden }
+			.conn .line::after { content: ''; position: absolute; left: 0; top: -60%; width: 100%; height: 60%; background: linear-gradient(180deg, transparent, var(--grn)); animation: flow 1.7s linear infinite }
+			@keyframes flow { to { top: 130% } }
+			/* flow / branch diagrams */
+			.flow { display: flex; align-items: stretch; gap: 0.5rem; flex-wrap: wrap }
+			.flow .step { flex: 1 1 130px; min-width: 118px; background: #160f29; border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.12rem; transition: transform 0.18s, border-color 0.18s }
+			.flow .step:hover { transform: translateY(-2px); border-color: #463879 }
+			.flow .step .ic { font-size: 1.05rem }
+			.flow .step b { font-size: 0.85rem }
+			.flow .step span { color: var(--mut); font-size: 0.73rem }
+			.flow .arr { align-self: center; color: var(--pur); font-size: 1.15rem; flex: 0 0 auto }
+			@media (max-width: 620px) { .flow { flex-direction: column } .flow .arr { transform: rotate(90deg); align-self: center } }
+			.branches { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 0.6rem; margin-top: 0.6rem }
+			.branch { border-radius: 10px; padding: 0.55rem 0.7rem; border: 1px solid var(--line) }
+			.branch b { font-size: 0.84rem; color: #fff }
+			.branch span { color: var(--mut); font-size: 0.74rem; display: block; margin-top: 0.1rem }
+			.branch.hi { border-left: 3px solid var(--grn); background: rgba(61,220,151,0.07) }
+			.branch.med { border-left: 3px solid var(--gld); background: rgba(255,209,102,0.06) }
+			.branch.lo { border-left: 3px solid #6b7280; background: rgba(107,114,128,0.07) }
+			/* at-a-glance stat strip */
+			.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 0.7rem; margin: 1.5rem 0 0 }
+			.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 13px; padding: 0.7rem 0.85rem }
+			.stat b { display: block; font-size: 1.55rem; font-weight: 800; background: linear-gradient(90deg, #7ff0e0, #3ddc97); -webkit-background-clip: text; background-clip: text; color: transparent }
+			.stat span { color: var(--mut); font-size: 0.73rem }
+			/* reveal on scroll */
+			.reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.55s ease, transform 0.55s ease }
+			.reveal.in { opacity: 1; transform: none }
 			footer { margin: 3rem 0 1.5rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--mut); font-size: 0.82rem }
 			footer a { color: #b9a6ff }
 			.back { display: inline-block; margin-bottom: 1rem; color: var(--mut); text-decoration: none; font-size: 0.85rem }
@@ -119,6 +171,14 @@ const built = new Date().toISOString().slice(0, 10)
 				<p class="sub">How the Bonnaroo 2026 PWA works — stack, edge architecture, constraints, and the decisions behind it.</p>
 				<p class="lede">Roo '26 is a standalone progressive web app for Bonnaroo 2026 at <code>roo26.alkem.dev</code>: full schedule + personal planner, an interactive map, live weather, closed-app push notifications, a live news/alerts pipeline fed by autonomous research, passive trip tracking, anonymous analytics, and offline support — running <b>entirely on Cloudflare's edge</b> with <b>no origin server</b> and <b>no client framework</b>.</p>
 
+				<div class="stats">
+					<div class="stat"><b>0</b><span>origin servers</span></div>
+					<div class="stat"><b>2</b><span>edge Workers</span></div>
+					<div class="stat"><b>4</b><span>app routes</span></div>
+					<div class="stat"><b>154</b><span>sets tracked</span></div>
+					<div class="stat"><b>100%</b><span>on the edge</span></div>
+				</div>
+
 				<section id="overview">
 					<h2><span class="n">01</span> Overview</h2>
 					<p>One Astro project produces a static PWA plus a single Cloudflare Worker. The Worker serves the static assets <i>and</i> a handful of on-demand <code>/roo26-api/*</code> routes (telemetry, news, push, crew). A second tiny cron Worker (<code>roo-push</code>) dispatches Web Push. Everything the user saves lives in their browser; everything shared lives in Cloudflare KV/D1. No accounts, no passwords, no server to babysit.</p>
@@ -148,24 +208,34 @@ const built = new Date().toISOString().slice(0, 10)
 
 				<section id="arch">
 					<h2><span class="n">03</span> Architecture</h2>
-					<pre class="diagram">                 ┌────────────────────────── the Farm ──────────────────────────┐
-                 │  📱 Installed PWA  (Astro static build + _app.js, localStorage) │
-                 └───────────────┬───────────────────────────────┬────────────────┘
-            static assets / app  │                               │  /roo26-api/* (fetch + sendBeacon)
-                                 ▼                               ▼
-   ┌─────────────────────────────────────────────────────────────────────────────┐
-   │                roo26  Worker  (Cloudflare edge — Static Assets + routes)      │
-   │   ASSETS  ·  /t telemetry  ·  /news (+overrides)  ·  /push  ·  /stats  ·/crew  │
-   └───────┬──────────────┬───────────────┬───────────────┬──────────────┬────────┘
-           ▼              ▼               ▼               ▼              ▼
-       PUSH_KV          D1 (DB)     Analytics Engine    R2 (opt.)    request.cf geo
-      push/news      telemetry log   live event stream   archive      (enrich)
-           ▲
-           │ reads every 5 min
-   ┌───────┴─────────────────┐         ┌──────────── external ───────────┐
-   │  roo-push  cron Worker   │────────▶│ Web Push services (FCM/APNs/…)   │
-   │  reminders + wx alerts   │         │ NWS · RainViewer · Tradable Bits │
-   └─────────────────────────┘         └──────────────────────────────────┘</pre>
+					<div class="diag">
+						<div class="node c-client">
+							<div class="row"><span class="ic">📱</span><div><b>Installed PWA</b><span>Astro static build · _app.js · localStorage — works offline</span></div></div>
+						</div>
+						<div class="conn">
+							<div class="lbls"><span class="l2">static assets ↓</span><span class="l2">/roo26-api/* · fetch + sendBeacon ↓</span></div>
+							<div class="line"></div>
+						</div>
+						<div class="node c-edge">
+							<div class="edge-hd"><span class="ic">⚡</span><b>roo26 Worker</b><span class="sub">Cloudflare edge — Static Assets + on-demand routes</span></div>
+							<div class="routes">
+								<span class="route">ASSETS</span><span class="route">/t telemetry</span><span class="route">/news + overrides</span><span class="route">/push</span><span class="route">/stats</span><span class="route">/crew</span>
+							</div>
+						</div>
+						<div class="conn"><div class="line"></div></div>
+						<div class="stores">
+							<div class="node"><span class="ic">🔑</span><b>PUSH_KV</b><span>push · news</span></div>
+							<div class="node"><span class="ic">🗄️</span><b>D1</b><span>telemetry log</span></div>
+							<div class="node"><span class="ic">📈</span><b>Analytics Engine</b><span>live event stream</span></div>
+							<div class="node"><span class="ic">📦</span><b>R2</b><span>archive · optional</span></div>
+							<div class="node"><span class="ic">🌎</span><b>request.cf</b><span>geo enrich</span></div>
+						</div>
+						<div class="conn"><div class="lbls"><span class="l2">↕ shares PUSH_KV · reads every 5 min</span></div></div>
+						<div class="dual">
+							<div class="node c-cron"><div class="row"><span class="ic">⏰</span><div><b>roo-push cron</b><span>reminders + weather alerts → Web Push</span></div></div></div>
+							<div class="node c-ext"><div class="row"><span class="ic">🌐</span><div><b>External</b><span>Web Push (FCM/APNs) · NWS · RainViewer · Tradable Bits</span></div></div></div>
+						</div>
+					</div>
 					<p>One <b>roo26</b> Worker is both the web server (Static Assets) and the API. It writes to KV (push subscriptions, the news doc), D1 (the durable telemetry log), and Analytics Engine (the live event stream), and enriches requests with Cloudflare's <code>request.cf</code> geo. The <b>roo-push</b> cron Worker shares the same KV namespace and fans out Web Push. There is no other backend.</p>
 				</section>
 
@@ -220,21 +290,42 @@ const built = new Date().toISOString().slice(0, 10)
 				<section id="news">
 					<h2><span class="n">08</span> News &amp; live overrides</h2>
 					<p>A news/alerts feed renders as a top banner + a scrollable Guide strip + a detail modal with grouped source links. The trick: a news item can carry a structured <b>schedule change</b> (<code>time</code>/<code>stage</code>/<code>cancel</code>/<code>add</code>) that the client overlays onto the schedule live — a ⚡ badge, re-synced reminders, a targeted push — <b>as data, never a redeploy</b>. Canonical <code>schedule.json</code> is never rewritten.</p>
-					<pre class="diagram">research agents ──▶ cross-reference ≥2 sources ──▶ confidence?
-                                                   ├─ high ─▶ POST /news (auto-publish + push)
-                                                   ├─ medium ▶ publish, no push
-                                                   └─ low ──▶ hold</pre>
+					<div class="diag">
+						<div class="flow">
+							<div class="step"><span class="ic">🤖</span><b>Research agents</b><span>scan official · press · social</span></div>
+							<div class="arr">→</div>
+							<div class="step"><span class="ic">🔎</span><b>Cross-reference</b><span>≥2 independent sources</span></div>
+							<div class="arr">→</div>
+							<div class="step"><span class="ic">🎚️</span><b>Confidence</b><span>score per rubric</span></div>
+						</div>
+						<div class="branches">
+							<div class="branch hi"><b>High</b><span>auto-publish → POST /news + targeted push</span></div>
+							<div class="branch med"><b>Medium</b><span>publish to feed, no push</span></div>
+							<div class="branch lo"><b>Low</b><span>hold for review</span></div>
+						</div>
+					</div>
 					<p>An autonomous loop (a Claude Code routine) runs the playbook on a cadence, now diffing against the <i>official</i> feed (§10). Publishing is gated by an <code>ADMIN_KEY</code> secret. See <code>NEWS.md</code>.</p>
 				</section>
 
 				<section id="telemetry">
 					<h2><span class="n">09</span> Telemetry &amp; analytics</h2>
-					<p>An anonymous client SDK queues events in <code>localStorage</code> and flushes via <code>sendBeacon</code> / <code>fetch(keepalive)</code> — so a tap in a dead zone still lands when signal returns. The ingestion route writes three ways, each optional:</p>
-					<ul>
-						<li><b>Analytics Engine</b> — fast aggregates + the live event stream (90-day).</li>
-						<li><b>D1</b> — the durable event log + a per-device plan snapshot.</li>
-						<li><b>R2</b> — optional immutable NDJSON archive.</li>
-					</ul>
+					<p>An anonymous client SDK queues events in <code>localStorage</code> and flushes via <code>sendBeacon</code> / <code>fetch(keepalive)</code> — so a tap in a dead zone still lands when signal returns. The ingestion route fans out to three sinks, each optional:</p>
+					<div class="diag">
+						<div class="flow">
+							<div class="step"><span class="ic">👆</span><b>Event</b><span>tap · view · geo</span></div>
+							<div class="arr">→</div>
+							<div class="step"><span class="ic">📥</span><b>Queue</b><span>localStorage · offline-safe</span></div>
+							<div class="arr">→</div>
+							<div class="step"><span class="ic">📡</span><b>Flush</b><span>sendBeacon on interval / unload</span></div>
+							<div class="arr">→</div>
+							<div class="step"><span class="ic">⚡</span><b>/roo26-api/t</b><span>enrich w/ request.cf</span></div>
+						</div>
+						<div class="branches">
+							<div class="branch hi"><b>Analytics Engine</b><span>live aggregates · 90-day stream</span></div>
+							<div class="branch med"><b>D1</b><span>durable log + plan snapshots</span></div>
+							<div class="branch lo"><b>R2</b><span>NDJSON archive · optional</span></div>
+						</div>
+					</div>
 					<p>Server-side enrichment from <code>request.cf</code> (country/city/colo/device) plus a salted IP hash — never the raw IP. A password-gated live dashboard at <code>/roo26-api/stats</code> streams a real-time event feed, KPIs, recent users, and historical charts. See <code>TELEMETRY.md</code>.</p>
 				</section>
 
@@ -312,6 +403,22 @@ const built = new Date().toISOString().slice(0, 10)
 				{ rootMargin: '-10% 0px -80% 0px' },
 			)
 			document.querySelectorAll('section[id]').forEach((s) => io.observe(s))
-		</script>
+
+			// reveal-on-scroll (JS-added so content stays visible without JS)
+			const rev = [...document.querySelectorAll('main section, .stats')]
+			rev.forEach((el) => el.classList.add('reveal'))
+			const ro = new IntersectionObserver(
+				(entries) => {
+					for (const e of entries) {
+						if (e.isIntersecting) {
+							e.target.classList.add('in')
+							ro.unobserve(e.target)
+						}
+					}
+				},
+				{ rootMargin: '0px 0px -8% 0px' },
+			)
+			rev.forEach((el) => ro.observe(el))
+</script>
 	</body>
 </html>
