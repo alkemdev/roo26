@@ -117,7 +117,8 @@ async function dispatch(env: Env) {
 			// set reminders that just came due (fire within a 6-min window)
 			if (rec.prefs?.sets !== false) {
 				for (const r of rec.reminders || []) {
-					if (r.sent || r.at > now || r.at < now - 6 * 60e3) continue
+					// fire anything due within the last 8 min (covers the 5-min cron gap + jitter)
+					if (r.sent || r.at > now || r.at < now - 8 * 60e3) continue
 					const ok = await sendPush(rec.sub, { title: r.title, body: r.body || '', url: r.url || '/plan', tag: r.tag }, env)
 					if (ok === 'gone') {
 						gone = true

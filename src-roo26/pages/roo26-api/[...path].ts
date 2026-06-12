@@ -317,11 +317,19 @@ export const ALL: APIRoute = async ({ request, params }) => {
 	//   affected set if the item carries a schedule change, else broadcast).
 	if (path === 'news') {
 		const pkv = (env as any).PUSH_KV as KVNamespace | undefined
+		const newsCacheKey = new Request(new URL('/roo26-api/news', request.url).toString())
 		if (request.method === 'GET') {
+			// edge-cache the feed so the every-5-min client poll doesn't read KV each
+			// time (KV reads scale with audience). Cache is purged on publish below.
+			const cache = (caches as any).default
+			const hit = await cache.match(newsCacheKey)
+			if (hit) return hit
 			const doc = (pkv && (await pkv.get('news:current', 'json'))) || { v: 1, items: [] }
-			return new Response(JSON.stringify(doc), {
-				headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=30' },
+			const res = new Response(JSON.stringify(doc), {
+				headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=60' },
 			})
+			await cache.put(newsCacheKey, res.clone())
+			return res
 		}
 		if (request.method === 'POST') {
 			const adminKey = (env as any).ADMIN_KEY as string | undefined
@@ -337,6 +345,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
 				doc.items = (doc.items || []).filter((x: any) => x.id !== body.id)
 				doc.updatedAt = Date.now()
 				await pkv.put('news:current', JSON.stringify(doc))
+				await (caches as any).default.delete(newsCacheKey)
 				return json({ ok: true, removed: body.id })
 			}
 
@@ -379,6 +388,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
 			doc.items = [item, ...(doc.items || []).filter((x: any) => x.id !== item.id)].slice(0, 60)
 			doc.updatedAt = Date.now()
 			await pkv.put('news:current', JSON.stringify(doc))
+			await (caches as any).default.delete(newsCacheKey)
 
 			let pushed = 0
 			if (body.notify !== false && sev !== 'silent') pushed = await pushNews(env, item)

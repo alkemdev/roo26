@@ -1,5 +1,5 @@
 {
-	// roo-push — Roo '26 notification dispatcher (cron, every minute).
+	// roo-push — Roo '26 notification dispatcher (cron, every 5 min).
 	// Deploy:  cd workers/roo-push && npx wrangler deploy
 	// Secret:  npx wrangler secret put VAPID_PRIVATE   (the base64url private key)
 	// Bind the SAME KV namespace id the app's PUSH_KV uses.
@@ -8,7 +8,10 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-06-11",
 	"compatibility_flags": ["global_fetch_strictly_public"],
-	"triggers": { "crons": ["* * * * *"] },
+	// every 5 min (was every minute) — one KV list() per run keeps us well under the
+	// free 1,000 list-ops/day limit. Reminders still land on time: the dispatcher
+	// fires anything due within an 8-min window (src/index.ts).
+	"triggers": { "crons": ["*/5 * * * *"] },
 	"observability": { "enabled": true },
 	"vars": {
 		// public VAPID key — must match the one shipped in the client
