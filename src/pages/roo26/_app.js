@@ -1317,7 +1317,7 @@ const POI_CATS = {
 	landmark: { label: 'Landmarks', emoji: '🎡', color: '#ff8bd2', on: true, always: true },
 	entrance: { label: 'Entrances', emoji: '🚪', color: '#ffb02e', on: true, always: true },
 	// the "find a thing" filters (the only chips)
-	food: { label: 'Food & drinks', emoji: '🍔', color: '#3ddc97', on: false },
+	food: { label: 'Food & drinks', emoji: '🍔', color: '#3ddc97', on: true },
 	water: { label: 'Water', emoji: '💧', color: '#46b3ff', on: true },
 	medical: { label: 'Medical', emoji: '⛑️', color: '#ff5252', on: true },
 	utility: { label: 'Restrooms', emoji: '🚻', color: '#8fa3ad', on: false },
