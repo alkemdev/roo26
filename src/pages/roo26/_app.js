@@ -1312,15 +1312,16 @@ $('#icsPlan').addEventListener('click', () => {
 
 // ───────────────────────── map ─────────────────────────
 const POI_CATS = {
-	stage: { label: 'Stages', emoji: '🎪', color: '#ff4f7b', on: true },
+	// always-on orientation layers (no chip — you don't toggle these off)
+	stage: { label: 'Stages', emoji: '🎪', color: '#ff4f7b', on: true, always: true },
+	landmark: { label: 'Landmarks', emoji: '🎡', color: '#ff8bd2', on: true, always: true },
+	entrance: { label: 'Entrances', emoji: '🚪', color: '#ffb02e', on: true, always: true },
+	// the "find a thing" filters (the only chips)
+	food: { label: 'Food & drinks', emoji: '🍔', color: '#3ddc97', on: false },
 	water: { label: 'Water', emoji: '💧', color: '#46b3ff', on: true },
 	medical: { label: 'Medical', emoji: '⛑️', color: '#ff5252', on: true },
-	entrance: { label: 'Entrances', emoji: '🚪', color: '#ffb02e', on: true },
-	food: { label: 'Food & shops', emoji: '🍕', color: '#3ddc97', on: false },
-	bar: { label: 'Bars & drinks', emoji: '🍺', color: '#f6c945', on: false },
-	utility: { label: 'Restrooms & misc', emoji: '🚻', color: '#8fa3ad', on: false },
+	utility: { label: 'Restrooms', emoji: '🚻', color: '#8fa3ad', on: false },
 	camping: { label: 'Camping', emoji: '⛺', color: '#b08bff', on: true },
-	landmark: { label: 'Landmarks', emoji: '🎡', color: '#ff8bd2', on: true },
 }
 
 let L = null // leaflet module, loaded lazily on first map view
@@ -1502,10 +1503,6 @@ function renderPoiChips() {
 		renderPoiChips()
 		tev('tracks_toggle', { on: tracksOn, points: track.length })
 	})
-	// opens the searchable food-vendor directory (vendors aren't map-pinnable —
-	// Bonnaroo doesn't publish per-vendor spots — so this is a browsable list)
-	const foodListChip = el('button', { class: 'chip', style: '--chip-c:#3ddc97' }, `🍔 Food (${FOOD_COUNT})`)
-	foodListChip.addEventListener('click', openFood)
 	const extraChips = []
 	if (crewAvailable) {
 		const c = el(
@@ -1521,21 +1518,29 @@ function renderPoiChips() {
 		radarChip,
 		routeChip,
 		tracksChip,
-		foodListChip,
-		...Object.entries(POI_CATS).map(([id, def]) => {
-			const c = el(
-				'button',
-				{ class: 'chip' + (def.on ? ' active' : ''), style: `--chip-c:${def.color}` },
-				def.emoji + ' ' + def.label,
-			)
-			c.addEventListener('click', () => {
-				def.on = !def.on
-				if (map) (def.on ? catLayers[id].addTo(map) : catLayers[id].remove())
-				renderPoiChips()
-			})
-			return c
-		}),
+		...Object.entries(POI_CATS)
+			.filter(([, def]) => !def.always) // orientation layers have no chip
+			.map(([id, def]) => {
+				const c = el(
+					'button',
+					{ class: 'chip' + (def.on ? ' active' : ''), style: `--chip-c:${def.color}` },
+					def.emoji + ' ' + def.label,
+				)
+				c.addEventListener('click', () => {
+					def.on = !def.on
+					if (map) (def.on ? catLayers[id].addTo(map) : catLayers[id].remove())
+					renderPoiChips()
+				})
+				return c
+			}),
 	)
+	// when Food & drinks is on, offer the full vendor list (most vendors aren't
+	// individually pinned, so this is the "what else is here" reference)
+	if (POI_CATS.food.on) {
+		const dirBtn = el('button', { class: 'chip', style: '--chip-c:#3ddc97' }, `🍴 All ${FOOD_COUNT} vendors`)
+		dirBtn.addEventListener('click', openFood)
+		wrap.append(dirBtn)
+	}
 }
 
 // — crew location sharing (only appears if the roo26-api backend is bound) —
