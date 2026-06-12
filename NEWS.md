@@ -109,13 +109,40 @@ On each cycle:
 | 1 reputable local/press outlet | 0.6–0.8 | publish, no push |
 | Social/fan chatter only | <0.6 | hold |
 
+## ▶ Start the watcher (copy-paste)
+Open a **new Claude Code thread on the `alkemdev/roo26` repo** (keep your dev thread
+separate). Paste the `ADMIN_KEY` in where shown, then paste this one line:
+
+```
+/loop 20m Run the Roo '26 live news watch (full playbook + writing/confidence rules in NEWS.md). Each cycle: (1) GET https://roo26.alkem.dev/roo26-api/news to de-dupe; (2) spawn parallel research agents to check bonnaroo.com (schedule images + alerts), @Bonnaroo on X & Instagram, Clashfinder bonnaroo2k26, and press/local (Billboard, Consequence, Stereogum, WKRN, MTSU Sidelines) for NEW schedule changes or incidents since last cycle; (3) cross-reference each candidate across >=2 independent sources and score confidence per NEWS.md; (4) for a confirmed set time/stage/cancellation change POST a structured `change` to https://roo26.alkem.dev/roo26-api/news (header x-admin-key: <PASTE_ADMIN_KEY>) so it updates the actual set + badge + targeted push; for an incident post a news item with grouped, link-checked source links; (5) auto-publish notify:true only at high confidence (official source or >=2 agreeing outlets); lower confidence -> notify:false or hold. Never edit git/schedule.json — publish only via the API. Report concisely what you found and published; if nothing changed say "no changes".
+```
+
+- Adjust the interval (`20m`) — tighter (`10m`) in the evenings when sets run, looser
+  overnight. Omit it (`/loop Run the Roo…`) to let the model self-pace.
+- **Stop it** anytime: send `stop` / "stop the loop" in that thread, or just close it.
+- It's **stateless** — if the cloud session gets reclaimed, start a fresh thread and
+  paste the same line; it re-reads the live feed to avoid duplicates.
+
+## What each cycle actually does
+1. `GET /roo26-api/news` → sees what's already posted (won't repost the same event).
+2. Spawns **research sub-agents** that web-search + fetch across the sources above.
+3. **Cross-references** candidates (≥2 independent sources) and scores confidence.
+4. Publishes via `POST /roo26-api/news` — which, server-side:
+   - appends the item (banner + Guide strip + modal go live within ~5 min / on refresh),
+   - overlays any `change` onto the schedule (new time + ⚡ badge + reminder re-sync),
+   - fires **Web Push** — targeted to people who starred the affected set, else broadcast.
+5. Prints a short report; waits for the next interval.
+
+**Guardrails:** it only talks to the API (never commits to git, so it can't break the
+build or the repo), it de-dupes every cycle, and it gates pushes on confidence. Cost note:
+each cycle runs web-search agents — at 20-min intervals that's a few dozen runs a day, so
+run it during active hours and stop it when you don't need it.
+
 ## Running it
-- **On a schedule:** `/loop 20m research Bonnaroo 2026 for new schedule changes or
-  incidents per NEWS.md, cross-reference ≥2 sources, and auto-publish high-confidence
-  items to /roo26-api/news` — runs the playbook every 20 min through the festival.
+- **On a schedule:** the `/loop` above (recommended; rich multi-source agent research).
 - **Event-driven trigger (optional):** the `roo-push` cron Worker can hash the
   bonnaroo.com schedule images each minute and flag re-publishes as candidates for the
-  agent to investigate (cheap official-change signal that beats social/press).
+  agent to investigate (cheap always-on official-change signal that beats social/press).
 
 ## Keys
 - `ADMIN_KEY` (Worker secret) gates publishing.
