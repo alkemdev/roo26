@@ -125,7 +125,6 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 					<h2>My Roo</h2>
 					<div class="plan-actions">
 						<button class="tool-btn" id="sharePlan">📤 Share my Roo</button>
-						<button class="tool-btn" id="spotifyPlan" title="Make a Spotify warm-up playlist from your starred artists" hidden>🎵 Spotify</button>
 						<button class="tool-btn" id="icsPlan" title="Add to your calendar">📅</button>
 						<button class="tool-btn tool-danger" id="clearPlan">Clear</button>
 					</div>
@@ -366,23 +365,6 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 					<div class="sheet-actions">
 						<button class="sheet-btn sheet-primary" id="importSave">Save to My Roo</button>
 						<button class="sheet-btn" id="importCancel">Not now</button>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Spotify playlist build status -->
-		<div class="sheet-wrap" id="spotifyWrap" hidden>
-			<div class="sheet pin-sheet sp-sheet">
-				<div class="sheet-body">
-					<div class="sp-icon" id="spotifyIcon"><div class="sp-spinner"></div></div>
-					<h3 class="sp-head" id="spotifyHead">Building your playlist</h3>
-					<p class="pin-hint sp-status" id="spotifyStatus">…</p>
-					<div class="sp-bar"><div class="sp-bar-fill" id="spotifyBarFill"></div></div>
-					<div class="sheet-actions">
-						<a class="sheet-btn sheet-primary" id="spotifyOpen" target="_blank" rel="noopener" hidden>Open in Spotify ↗</a>
-						<button class="sheet-btn" id="spotifyRetry" hidden>Try again</button>
-						<button class="sheet-btn" id="spotifyClose">Close</button>
 					</div>
 				</div>
 			</div>
@@ -1181,55 +1163,6 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		font-size: 0.72rem;
 		font-weight: 700;
 		color: #d9caff;
-	}
-	/* spotify build progress bar */
-	.sp-bar {
-		height: 8px;
-		border-radius: 999px;
-		background: var(--bg-3);
-		overflow: hidden;
-		margin: 0.7rem 0 0.3rem;
-	}
-	.sp-bar-fill {
-		height: 100%;
-		width: 0;
-		border-radius: 999px;
-		background: var(--roo-green);
-		transition: width 0.35s ease;
-	}
-	.sp-icon {
-		width: 3.4rem;
-		height: 3.4rem;
-		margin: 0.2rem auto 0.55rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 2.3rem;
-		line-height: 1;
-	}
-	.sp-icon.sp-ok {
-		color: var(--roo-green);
-	}
-	.sp-spinner {
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: 50%;
-		border: 3px solid var(--line);
-		border-top-color: var(--roo-green);
-		animation: spspin 0.8s linear infinite;
-	}
-	@keyframes spspin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-	.sp-head {
-		margin: 0 0 0.2rem;
-		text-align: center;
-	}
-	.sp-status {
-		min-height: 1.2em;
-		text-align: center;
 	}
 	/* notification settings rows */
 	.notif-row {
