@@ -110,7 +110,20 @@ async function weatherAlert() {
 async function dispatch(env: Env) {
 	const now = Date.now()
 	const wx = await weatherAlert()
+
+	// Gate the expensive per-subscriber scan behind two tiny control keys, so an
+	// idle tick costs ~2 KV reads instead of one-read-per-subscriber. We only walk
+	// every subscription when a reminder is actually due (now ≥ ctl:nextDue) or a
+	// NEW severe-weather alert appeared (id changed). Free-tier KV reads are the
+	// constraint — this is what keeps us under it as the audience grows.
+	const wxLast = await env.PUSH_KV.get('ctl:wxlast')
+	const wxNew = !!wx && wx.id !== wxLast
+	const nextDueRaw = await env.PUSH_KV.get('ctl:nextDue')
+	const reminderDue = nextDueRaw == null || now >= Number(nextDueRaw)
+	if (!reminderDue && !wxNew) return // nothing due — skip the scan entirely
+
 	let cursor: string | undefined
+	let minFuture = Infinity // earliest still-pending reminder, to re-arm ctl:nextDue
 	do {
 		const list = await env.PUSH_KV.list({ prefix: 'push:', cursor })
 		for (const k of list.keys) {
@@ -121,8 +134,13 @@ async function dispatch(env: Env) {
 			// set reminders that just came due (fire within a 6-min window)
 			if (rec.prefs?.sets !== false) {
 				for (const r of rec.reminders || []) {
+					if (r.sent) continue
 					// fire anything due within the last 8 min (covers the 5-min cron gap + jitter)
-					if (r.sent || r.at > now || r.at < now - 8 * 60e3) continue
+					if (r.at > now) {
+						if (r.at < minFuture) minFuture = r.at // track for re-arming the gate
+						continue
+					}
+					if (r.at < now - 8 * 60e3) continue
 					const ok = await sendPush(rec.sub, { title: r.title, body: r.body || '', url: r.url || '/plan', tag: r.tag }, env)
 					if (ok === 'gone') {
 						gone = true
@@ -146,6 +164,11 @@ async function dispatch(env: Env) {
 		}
 		cursor = list.list_complete ? undefined : list.cursor
 	} while (cursor)
+
+	// Re-arm the gate. If nothing's pending, park it 6 h out (a new subscription
+	// lowers it via the /push route, so we won't miss anything sooner).
+	await env.PUSH_KV.put('ctl:nextDue', String(minFuture === Infinity ? now + 6 * 3600e3 : minFuture))
+	if (wxNew) await env.PUSH_KV.put('ctl:wxlast', wx!.id)
 }
 
 // ───────────────────── official schedule auto-sync ─────────────────────

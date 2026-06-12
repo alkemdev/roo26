@@ -53,5 +53,17 @@ export const POST: APIRoute = async ({ request }) => {
 	}
 	// auto-expire a couple weeks out so stale subs don't linger past the fest
 	await kv.put(key, JSON.stringify(record), { expirationTtl: 14 * 24 * 3600 })
+
+	// Lower the cron's scan gate if this sub has an earlier pending reminder than
+	// what's armed. The roo-push cron skips its per-subscriber scan until now ≥
+	// ctl:nextDue, so this is how a fresh subscription guarantees it gets seen.
+	const now = Date.now()
+	let minFuture = Infinity
+	for (const r of rem) if (typeof r.at === 'number' && r.at > now && r.at < minFuture) minFuture = r.at
+	if (minFuture !== Infinity) {
+		const armedRaw = await kv.get('ctl:nextDue')
+		const armed = armedRaw == null ? Infinity : Number(armedRaw)
+		if (minFuture < armed) await kv.put('ctl:nextDue', String(minFuture))
+	}
 	return json({ ok: true, count: rem.length })
 }
