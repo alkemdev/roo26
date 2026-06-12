@@ -1790,6 +1790,28 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		border-color: #ff6a7c !important;
 		box-shadow: 0 0 12px rgba(255, 106, 124, 0.45) !important;
 	}
+	/* your starred set here — gold */
+	.poi-lbl .npl-mine {
+		display: block;
+		color: #ffd166;
+		font-weight: 800;
+		font-size: 0.9em;
+		max-width: 8.5rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.poi-lbl.lbl-mine {
+		border-color: #ffd166 !important;
+		box-shadow: 0 0 12px rgba(255, 209, 102, 0.4) !important;
+	}
+	.poi-lbl.lbl-live.lbl-mine {
+		border-color: #ff6a7c !important;
+	}
+	.poi-pin.pin-mine {
+		outline: 2px solid #ffd166;
+		outline-offset: 2px;
+	}
 	.poi-pin.pin-live {
 		border-color: #ff6a7c;
 		animation: pinpulse 1.5s ease-out infinite;

@@ -1446,16 +1446,28 @@ function refreshNowPlaying() {
 	for (const stageId in stageMarkers) {
 		const m = stageMarkers[stageId]
 		const name = STAGES[stageId]?.name || stageId
-		const live = SETS.find((s) => s.stage.id === stageId && !s.cancelled && setStatus(s, now) === 'live')
-		const next = SETS.filter((s) => s.stage.id === stageId && !s.cancelled && s.startMs && s.startMs > now).sort((a, b) => a.startMs - b.startMs)[0]
+		const here = SETS.filter((s) => s.stage.id === stageId && !s.cancelled)
+		const live = here.find((s) => setStatus(s, now) === 'live')
+		// YOUR next starred set at this stage — live now, or upcoming within 3h
+		const mine = here
+			.filter((s) => isFav(s.id) && s.startMs && (s === live || (s.startMs > now && s.startMs - now < 3 * 3600e3)))
+			.sort((a, b) => a.startMs - b.startMs)[0]
+		const next = here.filter((s) => s.startMs && s.startMs > now).sort((a, b) => a.startMs - b.startMs)[0]
 		let html = `<span class="npl-stage">${esc(name)}</span>`
-		if (live) html += `<span class="npl-now">● ${esc(live.artist)}</span>`
-		else if (next && next.startMs - now < 75 * 60e3) html += `<span class="npl-next">${untilLabel(next.startMs, now)} · ${esc(next.artist)}</span>`
+		if (live) html += `<span class="npl-now">● ${esc(live.artist)}${isFav(live.id) ? ' ★' : ''}</span>`
+		if (mine && mine !== live) html += `<span class="npl-mine">★ ${esc(mine.artist)} · ${untilLabel(mine.startMs, now)}</span>`
+		else if (!live && next && next.startMs - now < 75 * 60e3) html += `<span class="npl-next">${untilLabel(next.startMs, now)} · ${esc(next.artist)}</span>`
 		m.setTooltipContent(html)
 		const tt = m.getTooltip()?.getElement()
-		if (tt) tt.classList.toggle('lbl-live', !!live)
+		if (tt) {
+			tt.classList.toggle('lbl-live', !!live)
+			tt.classList.toggle('lbl-mine', !!mine)
+		}
 		const pin = m.getElement()?.querySelector('.poi-pin')
-		if (pin) pin.classList.toggle('pin-live', !!live)
+		if (pin) {
+			pin.classList.toggle('pin-live', !!live)
+			pin.classList.toggle('pin-mine', !!mine)
+		}
 	}
 }
 
