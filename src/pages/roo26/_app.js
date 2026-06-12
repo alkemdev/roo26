@@ -477,6 +477,7 @@ function renderDayTabs() {
 			b.addEventListener('click', () => {
 				state.day = d.id
 				store.set('day', d.id)
+				tev('day_switch', { day: d.id })
 				renderDayTabs()
 				renderSched()
 			})
@@ -670,6 +671,7 @@ $('#searchBox').addEventListener('input', (e) => {
 })
 
 $('#nowJump').addEventListener('click', () => {
+	tev('now_jump', {})
 	const today = currentFestDay()
 	if (today && today !== state.day) {
 		state.day = today
@@ -703,6 +705,7 @@ let sheetSet = null
 
 function openSheet(set) {
 	sheetSet = set
+	tev('artist_open', { artist: set.artist, set_id: set.id, day: set.day, stage: set.stage?.id })
 	const a = set.info
 	const day = SCHED.days.find((d) => d.id === set.day)
 	$('#sheetImg').style.backgroundImage = a?.img ? `url(${a.img})` : 'none'
@@ -1481,6 +1484,7 @@ function renderPoiChips() {
 		radarOn = !radarOn
 		radarOn ? showRadar() : hideRadar()
 		renderPoiChips()
+		tev('radar', { on: radarOn })
 	})
 	const routeChip = el(
 		'button',
@@ -1491,6 +1495,7 @@ function renderPoiChips() {
 		routeOn = !routeOn
 		drawRoute()
 		renderPoiChips()
+		tev('route', { on: routeOn })
 	})
 	const tracksChip = el(
 		'button',
@@ -1571,6 +1576,7 @@ async function crewTap() {
 			crew = null
 			store.set('crew', null)
 			renderPoiChips()
+			tev('crew', { action: 'leave' })
 		}
 		return
 	}
@@ -1592,6 +1598,7 @@ async function crewTap() {
 	store.set('crew', crew)
 	toast(`👥 In crew ${code} — share the code!`)
 	renderPoiChips()
+	tev('crew', { action: join.trim() ? 'join' : 'create' })
 	startCrew()
 }
 
