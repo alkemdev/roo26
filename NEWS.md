@@ -109,6 +109,34 @@ On each cycle:
 | 1 reputable local/press outlet | 0.6–0.8 | publish, no push |
 | Social/fan chatter only | <0.6 | hold |
 
+## 🎯 Official structured source — Tradable Bits (reverse-engineered)
+The official **Festiverse** app's set-times come from **Tradable Bits** (its data backend).
+Recovered from the public APK; **no user auth** — just the app's client key. This is the
+authoritative, structured, diffable feed the watcher should prefer over images/social.
+
+```
+GET https://tradablebits.com/api/v1/idols/events?api_key=0184f26f-2eee-4691-b981-95d49f563bfd&performance_uid=c98fc9b1-892c-4264-9400-30bc4dbd14ed
+```
+- Returns a JSON array of ~275 events (June 10–14). Per event: `event_name` (act),
+  `venue_name` (stage, "ROO STAGE N"), `start_date`/`start_time`/`end_time` (or
+  `start_timestamp`), `idol_uid`, `idol_image_url`.
+- `api_key` + `performance_uid` are **public client values** from the app; re-extract from a
+  newer APK if they ever rotate. (A Strapi CMS at `strapi.prodftv.internal.codelink.io` holds
+  artist metadata + maps but **not** set-times — keep its token out of the repo.)
+
+**Stage map (TB → our stage id):** 1=`what` · 2=`which` · 3=`this` · 4=`that` · 5=`other` ·
+6=`where` · 7=why · 8=`when` · 9=`groop` · 10=`silent` · 11=The Grove · 12=Snake & Jake's ·
+13=The Academy (talks) · 14=How Stage (talks). Stages 11–14 + many entries are **non-music
+Planet Roo programming** (yoga, podcasts, workshops, puppet parades) — filter those out; our
+app tracks music. Our set IDs are `${day}-${stage}-${slug(artist)}`.
+
+**How the watcher should use it:** each cycle, GET this feed, map to our stages/days, and diff
+against `schedule.json` on `{day,stage,artist}`. For our **existing** sets, auto-apply any
+**time/stage/cancellation** change via the override API (high confidence — it's official).
+A genuinely **new music act** (e.g. a day-of replacement like Claire Rosinkranz for Wolfmother)
+→ verify it's music (not a yoga class) before adding, then `add` it. Names are UPPERCASE in TB —
+title-case them and reconcile spelling against existing entries.
+
 ## ▶ Start the watcher (copy-paste)
 Open a **new Claude Code thread on the `alkemdev/roo26` repo** (keep your dev thread
 separate). Paste the `ADMIN_KEY` in where shown, then paste this one line:
