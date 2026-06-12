@@ -2860,10 +2860,10 @@ function doInstallWelcome() {
 }
 
 const WELCOME_STEPS = [
-	{ icon: '⭐', title: 'Build your plan', desc: 'Tap the ☆ on any artist to save it to your weekend.', act: 'plan', btn: 'Browse', done: () => Object.keys(state.favs).length > 0 },
-	{ icon: '🔔', title: 'Don’t miss a beat', desc: 'Reminders before your sets, plus weather & schedule-change alerts.', act: 'notif', btn: 'Turn on', done: () => notif.on === true },
-	{ icon: '📍', title: 'Find your way', desc: 'Live distance to every stage, find your crew, track your steps.', act: 'locate', btn: 'Turn on', done: () => state.locatePref === true },
-	{ icon: '📲', title: 'Add to home screen', desc: 'Full-screen, and works offline out on the Farm.', act: 'install', btn: 'Install', done: () => isStandalone() },
+	{ icon: '⭐', title: 'Save your sets', desc: 'Tap ☆ on any artist to add it to your plan.', act: 'plan', btn: 'Browse', done: () => Object.keys(state.favs).length > 0 },
+	{ icon: '🔔', title: 'Set reminders', desc: 'Get a heads-up before your sets, plus weather and schedule-change alerts.', act: 'notif', btn: 'Turn on', done: () => notif.on === true },
+	{ icon: '📍', title: 'Distance to stages', desc: 'See how far you are from each stage, find your crew, and track your steps.', act: 'locate', btn: 'Turn on', done: () => state.locatePref === true },
+	{ icon: '📲', title: 'Add to home screen', desc: 'Opens full-screen and works offline on the Farm.', act: 'install', btn: 'Install', done: () => isStandalone() },
 ]
 
 function renderWelcomeSteps() {
