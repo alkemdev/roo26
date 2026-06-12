@@ -1936,6 +1936,32 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	.route-step span {
 		font-weight: 700;
 	}
+	/* the immediate next hop: marching-ants flow + emphasised arrow/stop */
+	.route-next {
+		animation: routeFlow 0.9s linear infinite;
+	}
+	@keyframes routeFlow {
+		to {
+			stroke-dashoffset: -19; /* dash(8) + gap(11) — seamless loop toward the destination */
+		}
+	}
+	.route-arrow-next {
+		font-size: 1.4rem;
+		animation: routeArrowPulse 1.4s ease-in-out infinite;
+	}
+	@keyframes routeArrowPulse {
+		0%,
+		100% {
+			opacity: 0.55;
+		}
+		50% {
+			opacity: 1;
+		}
+	}
+	.route-step-next {
+		background: #ffd166;
+		box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.5), 0 1px 6px rgba(0, 0, 0, 0.6);
+	}
 	.qr-wrap {
 		position: fixed;
 		inset: 0;

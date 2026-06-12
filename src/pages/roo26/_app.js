@@ -1830,6 +1830,34 @@ function shortRotate(prev, target) {
 	return prev + delta
 }
 
+// quadratic-bezier arc between two points, bowed perpendicular by `bow` (fraction
+// of the segment length). Lets legs curve so back-and-forth hops don't overlap.
+function legArc(a, b, bow) {
+	const dLat = b.lat - a.lat
+	const dLon = b.lon - a.lon
+	const len = Math.hypot(dLat, dLon) || 1e-6
+	const cx = (a.lat + b.lat) / 2 + (-dLon / len) * bow * len
+	const cy = (a.lon + b.lon) / 2 + (dLat / len) * bow * len
+	const out = []
+	for (let t = 0; t <= 1.0001; t += 0.1) {
+		const u = 1 - t
+		out.push([u * u * a.lat + 2 * u * t * cx + t * t * b.lat, u * u * a.lon + 2 * u * t * cy + t * t * b.lon])
+	}
+	return out
+}
+
+// colour ramp for upcoming legs: 0 = next (gold) → pink → purple = furthest out
+function hexLerp(a, b, t) {
+	const A = parseInt(a.slice(1), 16)
+	const B = parseInt(b.slice(1), 16)
+	const ch = (sh) => [(sh >> 16) & 255, (sh >> 8) & 255, sh & 255]
+	const [ar, ag, ab] = ch(A)
+	const [br, bg, bb] = ch(B)
+	const m = (x, y) => Math.round(x + (y - x) * t)
+	return `#${((1 << 24) + (m(ar, br) << 16) + (m(ag, bg) << 8) + m(ab, bb)).toString(16).slice(1)}`
+}
+const rampColor = (f) => (f < 0.5 ? hexLerp('#ffe66d', '#ff6f9c', f * 2) : hexLerp('#ff6f9c', '#7c5cff', (f - 0.5) * 2))
+
 function drawRoute() {
 	if (!map || !routeLayer) return
 	routeLayer.clearLayers()
@@ -1843,36 +1871,62 @@ function drawRoute() {
 	for (const s of going) {
 		const poi = STAGE_POI[s.stage.id]
 		if (!pts.length || pts.at(-1).stage !== s.stage.id)
-			pts.push({ stage: s.stage.id, lat: poi.lat, lon: poi.lon, t: s.start })
+			pts.push({ stage: s.stage.id, lat: poi.lat, lon: poi.lon, t: s.start, ms: s.startMs })
 	}
 	if (pts.length < 2) return
-	L.polyline(
-		pts.map((p) => [p.lat, p.lon]),
-		{ color: '#ffe66d', weight: 3, opacity: 0.85, dashArray: '7 9' },
-	).addTo(routeLayer)
-	for (let i = 0; i < pts.length - 1; i++) {
-		const a = pts[i]
-		const b = pts[i + 1]
-		const mid = [(a.lat + b.lat) / 2, (a.lon + b.lon) / 2]
+
+	const now = Date.now()
+	const legs = []
+	for (let i = 0; i < pts.length - 1; i++) legs.push({ a: pts[i], b: pts[i + 1], done: pts[i + 1].ms < now })
+	const firstUpcoming = legs.findIndex((l) => !l.done)
+	const upcomingCount = legs.filter((l) => !l.done).length
+	// spread repeated stage-pairs so overlapping hops fan apart
+	const pairSeen = {}
+
+	legs.forEach((leg, i) => {
+		const key = [leg.a.stage, leg.b.stage].sort().join('~')
+		const seen = pairSeen[key] || 0
+		pairSeen[key] = seen + 1
+		const bow = 0.12 * (seen + 1) * (seen % 2 ? -1 : 1) // fan duplicates out alternately
+		const k = i - firstUpcoming // 0 = the next hop
+		const frac = upcomingCount > 1 ? Math.max(0, k) / (upcomingCount - 1) : 0
+		const color = leg.done ? '#6b6478' : rampColor(frac)
+		const weight = leg.done ? 2 : Math.max(2.5, 5 - Math.max(0, k) * 0.8)
+		const opacity = leg.done ? 0.4 : Math.max(0.5, 0.95 - Math.max(0, k) * 0.12)
+		const isNext = i === firstUpcoming
+		L.polyline(legArc(leg.a, leg.b, bow), {
+			color,
+			weight,
+			opacity,
+			lineCap: 'round',
+			dashArray: leg.done ? '2 8' : '8 11',
+			className: 'route-leg' + (isNext ? ' route-next' : ''),
+		}).addTo(routeLayer)
+
+		// direction arrow at the leg midpoint
+		const mid = [(leg.a.lat + leg.b.lat) / 2, (leg.a.lon + leg.b.lon) / 2]
 		L.marker(mid, {
 			interactive: false,
+			zIndexOffset: leg.done ? 0 : 500,
 			icon: L.divIcon({
 				className: '',
-				html: `<div class="route-arrow" style="transform:rotate(${bearing(a, b) - 90}deg)">➤</div>`,
+				html: `<div class="route-arrow${isNext ? ' route-arrow-next' : ''}" style="color:${color};transform:rotate(${bearing(leg.a, leg.b) - 90}deg)">➤</div>`,
 				iconSize: [22, 22],
 				iconAnchor: [11, 11],
 			}),
 		}).addTo(routeLayer)
-		L.marker([b.lat, b.lon], {
+
+		// numbered, timed step at each destination
+		L.marker([leg.b.lat, leg.b.lon], {
 			interactive: false,
 			icon: L.divIcon({
 				className: '',
-				html: `<div class="route-step">${i + 2}<span>${fmtTime(b.t)}</span></div>`,
+				html: `<div class="route-step${isNext ? ' route-step-next' : ''}">${i + 2}<span>${fmtTime(leg.b.t)}</span></div>`,
 				iconSize: [0, 0],
 				iconAnchor: [-16, 10],
 			}),
 		}).addTo(routeLayer)
-	}
+	})
 }
 
 // — custom pins: mark your camp, friends' camps, meetup spots —
