@@ -120,15 +120,17 @@ async function dispatch(env: Env) {
 	const wxNew = !!wx && wx.id !== wxLast
 	const nextDueRaw = await env.PUSH_KV.get('ctl:nextDue')
 	const reminderDue = nextDueRaw == null || now >= Number(nextDueRaw)
-	if (!reminderDue && !wxNew) return // nothing due — skip the scan entirely
+	if (!reminderDue && !wxNew) return { scanned: false, nextDueRaw, wxNew, now } // nothing due — skip the scan entirely
 
 	let cursor: string | undefined
+	let subs = 0
 	let minFuture = Infinity // earliest still-pending reminder, to re-arm ctl:nextDue
 	do {
 		const list = await env.PUSH_KV.list({ prefix: 'push:', cursor })
 		for (const k of list.keys) {
 			const rec: any = await env.PUSH_KV.get(k.name, 'json')
 			if (!rec?.sub) continue
+			subs++
 			let changed = false
 			let gone = false
 			// set reminders that just came due (fire within a 6-min window)
@@ -167,8 +169,10 @@ async function dispatch(env: Env) {
 
 	// Re-arm the gate. If nothing's pending, park it 6 h out (a new subscription
 	// lowers it via the /push route, so we won't miss anything sooner).
-	await env.PUSH_KV.put('ctl:nextDue', String(minFuture === Infinity ? now + 6 * 3600e3 : minFuture))
+	const armed = minFuture === Infinity ? now + 6 * 3600e3 : minFuture
+	await env.PUSH_KV.put('ctl:nextDue', String(armed))
 	if (wxNew) await env.PUSH_KV.put('ctl:wxlast', wx!.id)
+	return { scanned: true, subs, minFuture, armed, nextDueRaw, wxNew, now }
 }
 
 // ───────────────────── official schedule auto-sync ─────────────────────
@@ -313,8 +317,8 @@ export default {
 	async fetch(req: Request, env: Env) {
 		const p = new URL(req.url).pathname
 		if (p === '/run') {
-			await dispatch(env)
-			return new Response('dispatched')
+			const diag = await dispatch(env)
+			return new Response(JSON.stringify(diag ?? { ok: true }), { headers: { 'content-type': 'application/json' } })
 		}
 		if (p === '/sync') {
 			const n = await syncSchedule(env, true)
