@@ -1,0 +1,317 @@
+---
+// /colophon — standalone technical writeup of Roo '26: architecture, stack,
+// design constraints, and the decisions behind it. Linked subtly from the Guide.
+// Self-contained (own HTML + CSS), no app shell, no framework.
+const built = new Date().toISOString().slice(0, 10)
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<meta name="robots" content="noindex" />
+		<title>Roo '26 — Architecture & Colophon</title>
+		<meta name="description" content="How Roo '26 works: architecture, tech stack, design constraints, and the decisions behind the Bonnaroo 2026 PWA." />
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg: #0b0716;
+				--panel: rgba(28, 20, 48, 0.5);
+				--line: #271d44;
+				--txt: #ece7fb;
+				--mut: #9a8fc0;
+				--pur: #7c5cff;
+				--grn: #3ddc97;
+				--pnk: #ff8fb1;
+				--gld: #ffd166;
+				--mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+			}
+			* { box-sizing: border-box }
+			html { scroll-behavior: smooth; scroll-padding-top: 1.2rem }
+			body {
+				margin: 0;
+				font: 15px/1.65 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+				color: var(--txt);
+				background: var(--bg);
+				overflow-x: hidden;
+			}
+			.bg { position: fixed; inset: 0; z-index: -1; overflow: hidden }
+			.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.35; animation: float 22s ease-in-out infinite }
+			.b1 { width: 460px; height: 460px; background: var(--pur); top: -160px; left: -120px }
+			.b2 { width: 380px; height: 380px; background: var(--grn); bottom: -150px; right: -90px; animation-delay: -7s }
+			.b3 { width: 320px; height: 320px; background: var(--pnk); top: 45%; left: 60%; animation-delay: -13s }
+			@keyframes float { 0%,100% { transform: translate(0,0) scale(1) } 50% { transform: translate(40px,-30px) scale(1.12) } }
+			.layout { max-width: 1180px; margin: 0 auto; padding: 1.4rem; display: grid; grid-template-columns: 220px 1fr; gap: 2.2rem }
+			@media (max-width: 880px) { .layout { grid-template-columns: 1fr; gap: 1rem } }
+			/* sticky TOC */
+			nav.toc { position: sticky; top: 1.2rem; align-self: start; font-size: 0.82rem; max-height: 92vh; overflow-y: auto }
+			@media (max-width: 880px) { nav.toc { position: static; max-height: none; border-bottom: 1px solid var(--line); padding-bottom: 0.8rem } }
+			nav.toc .tt { font-weight: 800; color: #c9b8ff; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.7rem; margin: 0 0 0.5rem }
+			nav.toc a { display: block; color: var(--mut); text-decoration: none; padding: 0.2rem 0; border-left: 2px solid transparent; padding-left: 0.6rem }
+			nav.toc a:hover { color: var(--txt) }
+			nav.toc a.on { color: var(--grn); border-left-color: var(--grn) }
+			main { min-width: 0 }
+			h1 { font-size: 2.1rem; margin: 0; font-weight: 800; line-height: 1.1;
+				background: linear-gradient(90deg, #ff8fb1, #ffd166, #3ddc97, #7c5cff, #ff8fb1);
+				background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+				animation: hue 9s linear infinite }
+			@keyframes hue { to { background-position: 300% 0 } }
+			.sub { color: var(--mut); margin: 0.4rem 0 0; font-size: 0.95rem }
+			.lede { font-size: 1.05rem; line-height: 1.7; margin: 1.4rem 0 0 }
+			section { padding-top: 2.4rem }
+			h2 { font-size: 1.35rem; margin: 0 0 0.8rem; display: flex; align-items: center; gap: 0.55rem }
+			h2 .n { font-family: var(--mono); font-size: 0.8rem; color: var(--pur); border: 1px solid var(--line); border-radius: 7px; padding: 0.1rem 0.4rem }
+			h3 { font-size: 1rem; margin: 1.4rem 0 0.4rem; color: #d9caff }
+			p { margin: 0.5rem 0 }
+			a { color: #b9a6ff }
+			ul { margin: 0.4rem 0; padding-left: 1.1rem }
+			li { margin: 0.25rem 0 }
+			b { color: #fff }
+			code { font-family: var(--mono); font-size: 0.86em; background: #1a1330; border: 1px solid var(--line); border-radius: 5px; padding: 0.05rem 0.32rem; color: #e7defc }
+			.panel { background: var(--panel); backdrop-filter: blur(11px); -webkit-backdrop-filter: blur(11px); border: 1px solid var(--line); border-radius: 16px; padding: 1.05rem 1.2rem; box-shadow: 0 10px 34px rgba(0,0,0,0.28) }
+			pre { font-family: var(--mono); font-size: 0.78rem; line-height: 1.5; background: #120c24; border: 1px solid var(--line); border-radius: 12px; padding: 0.9rem 1rem; overflow-x: auto; color: #cdbff0 }
+			pre.diagram { color: #b9aee0 }
+			table { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin: 0.5rem 0 }
+			th, td { text-align: left; padding: 0.4rem 0.55rem; border-bottom: 1px solid var(--line); vertical-align: top }
+			th { color: var(--mut); font-weight: 600; white-space: nowrap }
+			td code { white-space: nowrap }
+			.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin: 0.6rem 0 }
+			@media (max-width: 620px) { .cards { grid-template-columns: 1fr } }
+			.card { background: #160f29; border: 1px solid var(--line); border-radius: 12px; padding: 0.7rem 0.85rem }
+			.card h4 { margin: 0 0 0.25rem; font-size: 0.92rem }
+			.card p { margin: 0; color: var(--mut); font-size: 0.82rem }
+			.tag { display: inline-block; font-family: var(--mono); font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid var(--line); color: #c9b8ff; margin: 0 0.3rem 0.3rem 0 }
+			.callout { border-left: 3px solid var(--pur); background: #160f29; border-radius: 0 10px 10px 0; padding: 0.6rem 0.9rem; margin: 0.8rem 0; font-size: 0.88rem }
+			.callout.dec { border-left-color: var(--gld) }
+			.dl dt { font-weight: 700; color: #fff; margin-top: 0.7rem }
+			.dl dd { margin: 0.1rem 0 0; color: var(--mut); font-size: 0.9rem }
+			footer { margin: 3rem 0 1.5rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--mut); font-size: 0.82rem }
+			footer a { color: #b9a6ff }
+			.back { display: inline-block; margin-bottom: 1rem; color: var(--mut); text-decoration: none; font-size: 0.85rem }
+			.back:hover { color: var(--txt) }
+		</style>
+	</head>
+	<body>
+		<div class="bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+		<div class="layout">
+			<nav class="toc">
+				<p class="tt">Contents</p>
+				<a href="#overview">Overview</a>
+				<a href="#stack">Tech stack</a>
+				<a href="#arch">Architecture</a>
+				<a href="#app">The app</a>
+				<a href="#data">Data model</a>
+				<a href="#features">Features</a>
+				<a href="#push">Notifications</a>
+				<a href="#news">News &amp; overrides</a>
+				<a href="#telemetry">Telemetry</a>
+				<a href="#sync">Official schedule sync</a>
+				<a href="#maps">Maps &amp; imagery</a>
+				<a href="#constraints">Design constraints</a>
+				<a href="#decisions">Decisions &amp; directions</a>
+				<a href="#ops">Deploy &amp; ops</a>
+			</nav>
+
+			<main>
+				<a class="back" href="/info">← back to Roo '26</a>
+				<h1>Roo '26 — Architecture &amp; Colophon</h1>
+				<p class="sub">How the Bonnaroo 2026 PWA works — stack, edge architecture, constraints, and the decisions behind it.</p>
+				<p class="lede">Roo '26 is a standalone progressive web app for Bonnaroo 2026 at <code>roo26.alkem.dev</code>: full schedule + personal planner, an interactive map, live weather, closed-app push notifications, a live news/alerts pipeline fed by autonomous research, passive trip tracking, anonymous analytics, and offline support — running <b>entirely on Cloudflare's edge</b> with <b>no origin server</b> and <b>no client framework</b>.</p>
+
+				<section id="overview">
+					<h2><span class="n">01</span> Overview</h2>
+					<p>One Astro project produces a static PWA plus a single Cloudflare Worker. The Worker serves the static assets <i>and</i> a handful of on-demand <code>/roo26-api/*</code> routes (telemetry, news, push, crew). A second tiny cron Worker (<code>roo-push</code>) dispatches Web Push. Everything the user saves lives in their browser; everything shared lives in Cloudflare KV/D1. No accounts, no passwords, no server to babysit.</p>
+					<div class="cards">
+						<div class="card"><h4>🎸 Plan</h4><p>Full schedule, star sets, overlap + leave-by walk times, share links/QR, calendar export.</p></div>
+						<div class="card"><h4>🗺️ Navigate</h4><p>Leaflet map: live distance to stages, food/bars, crew sharing, your trail, compass-to-camp.</p></div>
+						<div class="card"><h4>📣 Stay current</h4><p>Push reminders, weather alerts, and a live news feed that overlays day-of schedule changes.</p></div>
+						<div class="card"><h4>📊 Understand</h4><p>Anonymous, offline-resilient analytics into a live real-time dashboard.</p></div>
+					</div>
+				</section>
+
+				<section id="stack">
+					<h2><span class="n">02</span> Tech stack</h2>
+					<table>
+						<tr><th>Layer</th><th>Choice</th><th>Why</th></tr>
+						<tr><td>Framework</td><td>Astro 6</td><td>Static-first, zero client JS by default; on-demand routes for the API.</td></tr>
+						<tr><td>Runtime</td><td><code>@astrojs/cloudflare</code> → Workers</td><td>Static Assets + a Worker, one deploy, global edge, generous free tier.</td></tr>
+						<tr><td>Client logic</td><td>Vanilla JS, one bundle</td><td>No hydration, instant, offline-friendly on bad festival signal.</td></tr>
+						<tr><td>Map</td><td>Leaflet (lazy-loaded)</td><td>Light, offline-tolerant, raster tiles cache well.</td></tr>
+						<tr><td>Shared state</td><td>KV · D1 · Analytics Engine · R2</td><td>KV: push/news. D1: telemetry log. AE: live event stream. R2: optional archive.</td></tr>
+						<tr><td>Push</td><td>Hand-rolled Web Push</td><td>VAPID (RFC 8292) + aes128gcm (RFC 8291) via Web Crypto — zero deps.</td></tr>
+						<tr><td>Cron</td><td><code>roo-push</code> Worker</td><td>Scheduled dispatch of reminders + weather alerts.</td></tr>
+						<tr><td>External</td><td>NWS · RainViewer · Tradable Bits · Esri/OSM</td><td>Weather/alerts, rain radar, official schedule, map tiles.</td></tr>
+						<tr><td>Deploy</td><td>Workers Builds</td><td>Push to <code>main</code> → Cloudflare builds &amp; ships. Config-as-code in <code>wrangler.jsonc</code>.</td></tr>
+					</table>
+				</section>
+
+				<section id="arch">
+					<h2><span class="n">03</span> Architecture</h2>
+					<pre class="diagram">                 ┌────────────────────────── the Farm ──────────────────────────┐
+                 │  📱 Installed PWA  (Astro static build + _app.js, localStorage) │
+                 └───────────────┬───────────────────────────────┬────────────────┘
+            static assets / app  │                               │  /roo26-api/* (fetch + sendBeacon)
+                                 ▼                               ▼
+   ┌─────────────────────────────────────────────────────────────────────────────┐
+   │                roo26  Worker  (Cloudflare edge — Static Assets + routes)      │
+   │   ASSETS  ·  /t telemetry  ·  /news (+overrides)  ·  /push  ·  /stats  ·/crew  │
+   └───────┬──────────────┬───────────────┬───────────────┬──────────────┬────────┘
+           ▼              ▼               ▼               ▼              ▼
+       PUSH_KV          D1 (DB)     Analytics Engine    R2 (opt.)    request.cf geo
+      push/news      telemetry log   live event stream   archive      (enrich)
+           ▲
+           │ reads every 5 min
+   ┌───────┴─────────────────┐         ┌──────────── external ───────────┐
+   │  roo-push  cron Worker   │────────▶│ Web Push services (FCM/APNs/…)   │
+   │  reminders + wx alerts   │         │ NWS · RainViewer · Tradable Bits │
+   └─────────────────────────┘         └──────────────────────────────────┘</pre>
+					<p>One <b>roo26</b> Worker is both the web server (Static Assets) and the API. It writes to KV (push subscriptions, the news doc), D1 (the durable telemetry log), and Analytics Engine (the live event stream), and enriches requests with Cloudflare's <code>request.cf</code> geo. The <b>roo-push</b> cron Worker shares the same KV namespace and fans out Web Push. There is no other backend.</p>
+				</section>
+
+				<section id="app">
+					<h2><span class="n">04</span> The app</h2>
+					<p>Four clean, no-slash routes — <code>/</code>, <code>/map</code>, <code>/plan</code>, <code>/info</code> — are thin wrappers (<code>src-roo26/pages/*.astro</code>) around <b>one</b> component:</p>
+					<ul>
+						<li><code>_App.astro</code> — all markup + CSS (the app shell, every sheet/modal).</li>
+						<li><code>_app.js</code> — all client logic in a single bundle (router, schedule, map, planner, push, news, telemetry, onboarding…).</li>
+						<li><code>_data/*.json</code> — schedule, POIs, artists, food.</li>
+					</ul>
+					<p>No client framework, no hydration. State persists in <code>localStorage</code>; the router is a tiny tab-switch over the four views. The bet: festival phones on weak signal want an app that loads instantly, works offline, and never spins. A service worker pre-caches the shell + official maps.</p>
+				</section>
+
+				<section id="data">
+					<h2><span class="n">05</span> Data model</h2>
+					<table>
+						<tr><th>File</th><th>Holds</th></tr>
+						<tr><td><code>schedule.json</code></td><td>154 sets, compact <code>&#123;a,s,d,t,e&#125;</code> (artist, stage, day, start, end).</td></tr>
+						<tr><td><code>pois.json</code></td><td>63 map POIs across stages, food &amp; drinks, water, medical, restrooms, camping, landmarks.</td></tr>
+						<tr><td><code>artists.json</code></td><td>115 artists — photo, bio, genre, socials, news.</td></tr>
+						<tr><td><code>food.json</code></td><td>71 official vendors grouped into 10 cuisines (directory).</td></tr>
+					</table>
+					<h3>Stable IDs &amp; share links</h3>
+					<p>Each set has a deterministic id <code>&#123;day&#125;-&#123;stage&#125;-&#123;slug(artist)&#125;</code>, used by the planner, share links, and live overrides. Share links carry the whole plan in the URL fragment: <code>#p=3!&lt;name&gt;!&lt;srcIdx…&gt;</code>, indexing <b>stable source order</b> (v3) so appending sets never shifts anyone's saved links; the older <code>2!</code> form is still decoded.</p>
+					<h3>Festival time</h3>
+					<p>All times are local CDT without offset; the "festival day" rolls over at <b>8 AM</b> (a 1 AM set still belongs to the night before). No timezone parsing — epoch math appends <code>-05:00</code>.</p>
+				</section>
+
+				<section id="features">
+					<h2><span class="n">06</span> Features</h2>
+					<div class="cards">
+						<div class="card"><h4>Schedule &amp; planner</h4><p>Live NOW badges, search, star to plan, overlap warnings, 🚶 leave-by walk times, ICS export.</p></div>
+						<div class="card"><h4>Map</h4><p>5 intent filters + always-on orientation layers, live distance, food clusters &amp; bars, rain radar, route, 🐾 trail, compass-to-camp.</p></div>
+						<div class="card"><h4>Crew</h4><p>6-char codes; members post location every ~25s to KV with a 5-min TTL. No accounts, nothing persisted.</p></div>
+						<div class="card"><h4>Share</h4><p>Link + fullscreen QR carrying your plan; importing a friend's plan saves it with 🤝 overlap markers (a social graph).</p></div>
+						<div class="card"><h4>Weather</h4><p>NWS forecast + severe-alert banner, RainViewer radar overlay.</p></div>
+						<div class="card"><h4>Play</h4><p>Roo Quest, the Lil Roo pet, and a few easter eggs — passive, location-aware.</p></div>
+					</div>
+				</section>
+
+				<section id="push">
+					<h2><span class="n">07</span> Notifications</h2>
+					<p>Closed-app Web Push, crypto written by hand (no library): VAPID JWT signing (ES256) and aes128gcm payload encryption (ECDH P-256 → HKDF → AES-GCM) on Web Crypto. The client subscribes via <code>PushManager</code> and posts its subscription + computed reminder timestamps + starred set IDs to <code>/roo26-api/push</code> → KV. The <code>roo-push</code> cron reads KV every 5 minutes and fires:</p>
+					<ul>
+						<li><b>Set reminders</b> — default 20-min lead, fired within an 8-min window.</li>
+						<li><b>Severe weather</b> — NWS active alerts for the Farm, once per alert.</li>
+						<li><b>Targeted news</b> — schedule-change pushes go only to people who starred the affected set.</li>
+					</ul>
+				</section>
+
+				<section id="news">
+					<h2><span class="n">08</span> News &amp; live overrides</h2>
+					<p>A news/alerts feed renders as a top banner + a scrollable Guide strip + a detail modal with grouped source links. The trick: a news item can carry a structured <b>schedule change</b> (<code>time</code>/<code>stage</code>/<code>cancel</code>/<code>add</code>) that the client overlays onto the schedule live — a ⚡ badge, re-synced reminders, a targeted push — <b>as data, never a redeploy</b>. Canonical <code>schedule.json</code> is never rewritten.</p>
+					<pre class="diagram">research agents ──▶ cross-reference ≥2 sources ──▶ confidence?
+                                                   ├─ high ─▶ POST /news (auto-publish + push)
+                                                   ├─ medium ▶ publish, no push
+                                                   └─ low ──▶ hold</pre>
+					<p>An autonomous loop (a Claude Code routine) runs the playbook on a cadence, now diffing against the <i>official</i> feed (§10). Publishing is gated by an <code>ADMIN_KEY</code> secret. See <code>NEWS.md</code>.</p>
+				</section>
+
+				<section id="telemetry">
+					<h2><span class="n">09</span> Telemetry &amp; analytics</h2>
+					<p>An anonymous client SDK queues events in <code>localStorage</code> and flushes via <code>sendBeacon</code> / <code>fetch(keepalive)</code> — so a tap in a dead zone still lands when signal returns. The ingestion route writes three ways, each optional:</p>
+					<ul>
+						<li><b>Analytics Engine</b> — fast aggregates + the live event stream (90-day).</li>
+						<li><b>D1</b> — the durable event log + a per-device plan snapshot.</li>
+						<li><b>R2</b> — optional immutable NDJSON archive.</li>
+					</ul>
+					<p>Server-side enrichment from <code>request.cf</code> (country/city/colo/device) plus a salted IP hash — never the raw IP. A password-gated live dashboard at <code>/roo26-api/stats</code> streams a real-time event feed, KPIs, recent users, and historical charts. See <code>TELEMETRY.md</code>.</p>
+				</section>
+
+				<section id="sync">
+					<h2><span class="n">10</span> Official schedule sync</h2>
+					<p>The official Festiverse app has no public API. It was reverse-engineered from the published APK — an Expo/React Native app whose Hermes bytecode was disassembled (<code>hermes-dec</code>) to recover the baked config. The set-times come from <b>Tradable Bits</b>, fetchable with a public client key and <b>no user auth</b>:</p>
+					<pre>GET tradablebits.com/api/v1/idols/events?api_key=…&amp;performance_uid=… → 275 events</pre>
+					<p>We diff this against our schedule and auto-apply day-of changes through the override system (it's how <i>Wolfmother → Claire Rosinkranz</i> landed live). Full method, ethics, and the stage map: <code>docs/festiverse-api-reverse-engineering.md</code>.</p>
+				</section>
+
+				<section id="maps">
+					<h2><span class="n">11</span> Maps &amp; imagery</h2>
+					<p>Leaflet over Esri World Imagery. Map basemaps are stale mosaics, so during the festival the field looks empty. The honest tradeoff was researched: free <b>Sentinel-2</b> (10 m, ~5-day revisit) shows the buildout footprint; sub-meter "today" imagery requires paid satellite <i>tasking</i> (Planet/Maxar). A recent-imagery layer is feasible but currently undeployed — documented as a tradeoff rather than shipped.</p>
+				</section>
+
+				<section id="constraints">
+					<h2><span class="n">12</span> Design constraints &amp; invariants</h2>
+					<dl class="dl">
+						<dt>Offline-first</dt><dd>One vanilla bundle, localStorage state, SW precache, official maps cached. The app must open and work with no signal.</dd>
+						<dt>Share-link stability</dt><dd>v3 indexes stable <code>srcIdx</code> → appending sets never breaks links; reordering breaks legacy v2 only.</dd>
+						<dt>Festival time</dt><dd>CDT, 8 AM rollover, no <code>Date</code> timezone parsing.</dd>
+						<dt>localStorage keys</dt><dd>Stable + migrated, never silently broken.</dd>
+						<dt>Free-tier discipline</dt><dd>Cloudflare free limits respected — e.g. <code>/news</code> is edge-cached and the cron runs every 5 min to stay under the 1,000 KV-list/day cap.</dd>
+						<dt>Secrets server-side</dt><dd>No build-time secrets in client JS; VAPID private / admin / stats keys are Worker secrets.</dd>
+						<dt>Ship to main</dt><dd>Small commits straight to <code>main</code>; Workers Builds deploys. No feature branches.</dd>
+					</dl>
+				</section>
+
+				<section id="decisions">
+					<h2><span class="n">13</span> Decisions &amp; directions</h2>
+					<p>The notable calls made along the way — what was asked for, and what was decided:</p>
+					<div class="callout dec"><b>Vibe-ship to main.</b> Everything commits/deploys straight to <code>main</code>; no branches, no PRs.</div>
+					<div class="callout dec"><b>Spotify removed.</b> A warm-up-playlist feature hit Spotify's Development-Mode 403 — playlist <i>writes</i> are blocked for hobby apps and Extended Quota is enterprise-only. No fix exists, so the feature was pulled rather than left broken.</div>
+					<div class="callout dec"><b>Maximal telemetry, incl. GPS.</b> By request, analytics is comprehensive and uploads the location trail too; the "never uploaded" promise was dropped and a fine-print privacy note added.</div>
+					<div class="callout dec"><b>Auto-publish if verified.</b> The news pipeline auto-publishes high-confidence changes (official source or ≥2 agreeing outlets) and pushes affected fans — no human gate, with confidence/dedupe/link-check guardrails.</div>
+					<div class="callout dec"><b>Alerts: concise, sourced.</b> Tight summaries, ≤6 bullets ordered When/Where/Affected/Sets/Cause/Caveat, always cite real (link-checked) sources.</div>
+					<div class="callout dec"><b>Onboarding: plain &amp; value-first.</b> The welcome sheet leads with the free action (star sets), then primes each permission before the OS prompt; utility-first copy, no slogans.</div>
+					<div class="callout dec"><b>Food: directory + clusters, no fake pins.</b> Bonnaroo doesn't publish per-vendor GPS, so all 71 vendors are a searchable list, and the map shows honest food <i>cluster</i> zones with directions instead of invented coordinates.</div>
+					<div class="callout dec"><b>Fewer map filters.</b> Merged food + drinks, cut toggles 9 → 5, and made Stages/Landmarks/Entrances always-on orientation layers.</div>
+					<div class="callout dec"><b>Reverse-engineer the official schedule.</b> With no public API, the Festiverse app was torn down from public artifacts to find the Tradable Bits feed and keep our data in sync.</div>
+					<div class="callout dec"><b>Stay in the free tier.</b> When KV usage spiked, the fix was architectural — edge-cache the feed and throttle the cron — not a paid upgrade.</div>
+				</section>
+
+				<section id="ops">
+					<h2><span class="n">14</span> Deploy &amp; ops</h2>
+					<p><b>roo26</b> deploys via Workers Builds on every push to <code>main</code>. <b>roo-push</b> is deployed manually (<code>wrangler deploy</code>). Bindings: <code>PUSH_KV</code>, <code>DB</code> (D1), <code>ROO26_AE</code> (Analytics Engine), optional R2; VAPID public key as a var. Secrets: <code>VAPID_PRIVATE</code>, <code>ADMIN_KEY</code>, <code>STATS_KEY</code>.</p>
+					<p>Companion docs in the repo:</p>
+					<p>
+						<span class="tag">README.md — file layout</span>
+						<span class="tag">TELEMETRY.md — analytics + queries</span>
+						<span class="tag">NEWS.md — alerts + autonomous loop</span>
+						<span class="tag">docs/festiverse-api-reverse-engineering.md</span>
+					</p>
+				</section>
+
+				<footer>
+					Roo '26 is unofficial &amp; fan-made — set times can change; the official Festiverse app has the final word.
+					Built on Cloudflare's edge. · <a href="/info">← back to the app</a> · <span style="opacity:.6">rev {built}</span>
+				</footer>
+			</main>
+		</div>
+		<script is:inline>
+			// scroll-spy: highlight the current section in the TOC
+			const links = [...document.querySelectorAll('nav.toc a')]
+			const byId = Object.fromEntries(links.map((a) => [a.getAttribute('href').slice(1), a]))
+			const io = new IntersectionObserver(
+				(entries) => {
+					for (const e of entries) {
+						if (e.isIntersecting) {
+							links.forEach((l) => l.classList.remove('on'))
+							byId[e.target.id]?.classList.add('on')
+						}
+					}
+				},
+				{ rootMargin: '-10% 0px -80% 0px' },
+			)
+			document.querySelectorAll('section[id]').forEach((s) => io.observe(s))
+		</script>
+	</body>
+</html>

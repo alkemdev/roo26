@@ -471,6 +471,7 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 					</div>
 					<p class="help-foot">Unofficial &amp; fan-made. Set times can change — the official Festiverse app has the final word.</p>
 					<p class="help-foot">Privacy: this app collects anonymous usage analytics — taps, selections, approximate location/movement and device info — to understand how it's used and improve it. No accounts, no names sold; data is tied to a random device ID, not your identity.</p>
+					<p class="help-foot"><a href="/colophon" class="colophon-link">⚙ How this was built — architecture &amp; colophon →</a></p>
 				</div>
 			</div>
 		</div>
@@ -2562,6 +2563,14 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		color: var(--dim);
 		font-size: 0.72rem;
 		text-align: center;
+	}
+	.colophon-link {
+		color: var(--mut);
+		text-decoration: none;
+		border-bottom: 1px dotted var(--line);
+	}
+	.colophon-link:hover {
+		color: var(--txt);
 	}
 
 	/* ── official map viewer ── */
