@@ -373,13 +373,15 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 
 		<!-- Spotify playlist build status -->
 		<div class="sheet-wrap" id="spotifyWrap" hidden>
-			<div class="sheet pin-sheet">
+			<div class="sheet pin-sheet sp-sheet">
 				<div class="sheet-body">
-					<h3>🎵 Spotify playlist</h3>
-					<p class="pin-hint" id="spotifyStatus">…</p>
+					<div class="sp-icon" id="spotifyIcon"><div class="sp-spinner"></div></div>
+					<h3 class="sp-head" id="spotifyHead">Building your playlist</h3>
+					<p class="pin-hint sp-status" id="spotifyStatus">…</p>
 					<div class="sp-bar"><div class="sp-bar-fill" id="spotifyBarFill"></div></div>
 					<div class="sheet-actions">
 						<a class="sheet-btn sheet-primary" id="spotifyOpen" target="_blank" rel="noopener" hidden>Open in Spotify ↗</a>
+						<button class="sheet-btn" id="spotifyRetry" hidden>Try again</button>
 						<button class="sheet-btn" id="spotifyClose">Close</button>
 					</div>
 				</div>
@@ -1194,6 +1196,40 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		border-radius: 999px;
 		background: var(--roo-green);
 		transition: width 0.35s ease;
+	}
+	.sp-icon {
+		width: 3.4rem;
+		height: 3.4rem;
+		margin: 0.2rem auto 0.55rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 2.3rem;
+		line-height: 1;
+	}
+	.sp-icon.sp-ok {
+		color: var(--roo-green);
+	}
+	.sp-spinner {
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		border: 3px solid var(--line);
+		border-top-color: var(--roo-green);
+		animation: spspin 0.8s linear infinite;
+	}
+	@keyframes spspin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	.sp-head {
+		margin: 0 0 0.2rem;
+		text-align: center;
+	}
+	.sp-status {
+		min-height: 1.2em;
+		text-align: center;
 	}
 	/* notification settings rows */
 	.notif-row {

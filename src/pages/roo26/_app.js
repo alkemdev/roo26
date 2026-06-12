@@ -935,6 +935,9 @@ async function spotifyAuth() {
 		code_challenge_method: 'S256',
 		code_challenge: challenge,
 		scope: SPOTIFY_SCOPES,
+		// force the consent screen so a re-auth actually re-grants the
+		// playlist-modify scopes (a silent re-auth reuses the old, narrower ones)
+		show_dialog: 'true',
 	})
 	location.href = `https://accounts.spotify.com/authorize?${p}`
 }
@@ -973,21 +976,50 @@ const spApi = (access) => (path, opts = {}) => {
 }
 
 // status popup so you can see the build progress (it takes a few seconds)
+function spIcon(state, glyph) {
+	const i = $('#spotifyIcon')
+	i.className = 'sp-icon' + (state ? ' sp-' + state : '')
+	i.innerHTML = glyph != null ? glyph : '<div class="sp-spinner"></div>'
+}
 function spShow() {
+	spIcon('loading')
+	$('#spotifyHead').textContent = 'Getting set up…'
 	$('#spotifyOpen').hidden = true
+	$('#spotifyRetry').hidden = true
 	$('#spotifyBarFill').style.width = '0%'
+	$('#spotifyStatus').textContent = ''
 	$('#spotifyWrap').hidden = false
 	document.body.style.overflow = 'hidden'
 }
-function spStatus(msg, pct) {
-	$('#spotifyStatus').textContent = msg
+// head = step headline, msg = detail line
+function spStatus(head, msg, pct) {
+	if (head != null) $('#spotifyHead').textContent = head
+	if (msg != null) $('#spotifyStatus').textContent = msg
 	if (pct != null) $('#spotifyBarFill').style.width = `${Math.round(pct)}%`
+}
+function spDone(head, msg, url) {
+	spIcon('ok', '✓')
+	$('#spotifyHead').textContent = head
+	$('#spotifyStatus').textContent = msg
+	$('#spotifyBarFill').style.width = '100%'
+	const open = $('#spotifyOpen')
+	open.href = url
+	open.hidden = false
+	$('#spotifyRetry').hidden = true
+}
+function spError(msg) {
+	spIcon('err', '⚠️')
+	$('#spotifyHead').textContent = 'Couldn’t finish'
+	$('#spotifyStatus').textContent = msg
+	$('#spotifyBarFill').style.width = '0%'
+	$('#spotifyRetry').hidden = false // Try again → re-runs (re-auths if token was cleared)
 }
 function spClose() {
 	$('#spotifyWrap').hidden = true
 	document.body.style.overflow = ''
 }
 $('#spotifyClose').addEventListener('click', spClose)
+$('#spotifyRetry').addEventListener('click', () => buildSpotifyPlaylist())
 $('#spotifyWrap').addEventListener('click', (e) => {
 	if (e.target.id === 'spotifyWrap') spClose()
 })
@@ -1034,7 +1066,7 @@ async function buildSpotifyPlaylist() {
 	const access = await spotifyToken()
 	if (!access) return spotifyAuth() // sign in, then resume on redirect (no popup yet)
 	spShow()
-	spStatus('Finding your tracks…', 4)
+	spStatus('Finding your tracks', 'Searching your starred artists…', 4)
 	try {
 		const api = spApi(access)
 		// unique artists from your plan ({id?, name}); dedupe by id or name
@@ -1046,7 +1078,7 @@ async function buildSpotifyPlaylist() {
 		let authErr = false
 		for (let i = 0; i < artists.length; i++) {
 			const a = artists[i]
-			spStatus(`Finding tracks — ${i + 1}/${artists.length} artists…`, 4 + (i / artists.length) * 66)
+			spStatus('Finding your tracks', `${i + 1} / ${artists.length} artists`, 4 + (i / artists.length) * 64)
 			const r = await spReq(api, `/search?q=${encodeURIComponent(`artist:"${a.name}"`)}&type=track&limit=10&market=US`)
 			if (!r) continue // gave up after retries → just skip this artist
 			if (r.status === 401) {
@@ -1063,48 +1095,65 @@ async function buildSpotifyPlaylist() {
 		}
 		if (authErr) {
 			store.del('spotify')
-			return spStatus('Spotify session expired — close this and tap 🎵 again to sign back in.', 0)
+			return spError('Your Spotify session expired. Tap “Try again” to sign back in.')
 		}
 		const dedup = [...new Set(uris)]
-		if (!dedup.length) return spStatus('Couldn’t find tracks for your starred artists. Close this and try again.', 0)
-		spStatus('Creating your playlist…', 80)
+		if (!dedup.length) return spError('Couldn’t find tracks for your starred artists. Try again in a bit.')
+
 		const meRes = await spReq(api, '/me')
 		const me = meRes?.ok ? await meRes.json().catch(() => null) : null
-		if (!me?.id) return spStatus('Spotify is being slow right now — close this and try again.', 0)
-		let plRes = await spReq(api, `/users/${encodeURIComponent(me.id)}/playlists`, {
-			method: 'POST',
-			body: JSON.stringify({
-				name: "My Roo '26 🌈",
-				description: `Warm-up for Bonnaroo 2026 — ${artists.length} artists from my plan @ roo26.alkem.dev`,
-				public: false,
-			}),
-		})
-		if (!plRes?.ok) {
-			// auth/scope problem → drop the token so the next tap re-authorizes fresh
-			if (plRes && (plRes.status === 401 || plRes.status === 403)) store.del('spotify')
-			return spStatus(`Couldn’t create the playlist (${await spErr(plRes)}). Close this and tap 🎵 again.`, 0)
+		if (!me?.id) {
+			if (meRes && (meRes.status === 401 || meRes.status === 403)) store.del('spotify')
+			return spError(`Spotify wouldn’t let us in (${await spErr(meRes)}). Tap “Try again” to reconnect.`)
 		}
-		const pl = await plRes.json().catch(() => null)
-		if (!pl?.id) return spStatus('Couldn’t create the playlist — close this and try again.', 0)
-		// add tracks in batches; tolerate a failed batch and keep going
+
+		// reuse the "My Roo '26" playlist we made before (so re-runs UPDATE it
+		// instead of piling up duplicates); otherwise create a fresh one
+		spStatus('Building your playlist', 'Setting it up…', 78)
+		let pl = null
+		let reuse = false
+		const savedId = store.get('spotify_pl', null)
+		if (savedId) {
+			const ex = await spReq(api, `/playlists/${savedId}?fields=id,external_urls`)
+			if (ex?.ok) {
+				pl = await ex.json().catch(() => null)
+				reuse = !!pl?.id
+			}
+		}
+		if (!pl) {
+			const plRes = await spReq(api, `/users/${encodeURIComponent(me.id)}/playlists`, {
+				method: 'POST',
+				body: JSON.stringify({
+					name: "My Roo '26 🌈",
+					description: `Warm-up for Bonnaroo 2026 — ${artists.length} artists from my plan @ roo26.alkem.dev`,
+					public: false,
+				}),
+			})
+			if (!plRes?.ok) {
+				// almost always insufficient scope → drop token so Try again re-consents
+				if (plRes && (plRes.status === 401 || plRes.status === 403)) store.del('spotify')
+				return spError(`Couldn’t create the playlist (${await spErr(plRes)}). Tap “Try again” to reconnect Spotify.`)
+			}
+			pl = await plRes.json().catch(() => null)
+			if (!pl?.id) return spError('Couldn’t create the playlist. Tap “Try again”.')
+			store.set('spotify_pl', pl.id)
+		}
+
+		// add tracks; when reusing, the first batch is a PUT to REPLACE old contents
 		let added = 0
 		for (let i = 0; i < dedup.length; i += 100) {
 			const batch = dedup.slice(i, i + 100)
-			spStatus(`Adding tracks — ${Math.min(i + batch.length, dedup.length)}/${dedup.length}…`, 90 + (i / dedup.length) * 9)
-			const ar = await spReq(api, `/playlists/${pl.id}/tracks`, { method: 'POST', body: JSON.stringify({ uris: batch }) })
+			spStatus('Building your playlist', `Adding ${Math.min(i + batch.length, dedup.length)} / ${dedup.length} tracks…`, 86 + (i / dedup.length) * 13)
+			const method = reuse && i === 0 ? 'PUT' : 'POST'
+			const ar = await spReq(api, `/playlists/${pl.id}/tracks`, { method, body: JSON.stringify({ uris: batch }) })
 			if (ar?.ok) added += batch.length
 		}
-		const open = $('#spotifyOpen')
-		open.href = pl.external_urls?.spotify || `https://open.spotify.com/playlist/${pl.id}`
-		open.hidden = false
-		spStatus(
-			added ? `✅ Done — ${added} tracks from ${artists.length} artists!` : 'Playlist created, but tracks didn’t add — open it and tap 🎵 again.',
-			100,
-		)
+		const url = pl.external_urls?.spotify || `https://open.spotify.com/playlist/${pl.id}`
+		if (added) spDone(reuse ? 'Playlist updated! 🎉' : 'Playlist ready! 🎉', `${added} tracks from ${artists.length} artists`, url)
+		else spDone('Almost there', 'Playlist saved, but tracks didn’t add — open it and tap 🎵 again.', url)
 		questFlag('share')
 	} catch {
-		// last-resort safety net — but if a playlist link exists, still offer it
-		spStatus('Spotify had a hiccup — close this and try again.', 0)
+		spError('Spotify had a hiccup. Tap “Try again”.')
 	}
 }
 
