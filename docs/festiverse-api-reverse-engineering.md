@@ -28,6 +28,29 @@ Returns a JSON array of **~275 events** (Jun 10–14, all 14 stages). `api_key` 
 
 ---
 
+## The path, end to end
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Me
+    participant DNS as DNS / HTTP
+    participant AP as APKPure CDN
+    participant APK as APK bundle
+    participant TB as Tradable Bits
+    Me->>DNS: probe festiverse.com + subdomains
+    DNS-->>Me: only Webflow marketing + a 301 (dead end)
+    Me->>AP: GET tapi.pureapk.com get_app_detail
+    AP-->>Me: direct data.winudf.com XAPK url
+    Me->>APK: unzip xapk → apk → assets/index.android.bundle
+    Note over APK: Hermes bytecode — plaintext grep = junk
+    Me->>APK: hermes-dec disassemble → string table
+    APK-->>Me: baked hosts + client keys (Tradable Bits, Strapi)
+    Me->>TB: GET /api/v1/idols/events?api_key=…&performance_uid=…
+    TB-->>Me: 200 · 275 events · no user auth
+```
+
+---
+
 ## 0. Target & goal
 - **App:** Festiverse — the official Bonnaroo app. Android `com.festiverse.production`,
   iOS `id6744997695`. Publisher *Festiverse LLC*; built by the agency **Codelink**.

@@ -75,6 +75,57 @@ const deployDef = `flowchart LR
   WB --> AB["astro build"]
   AB --> DEP["deploy roo26 Worker"]
   RP["roo-push"] -. "manual: wrangler deploy" .-> DEP2["deploy cron Worker"]`
+
+const dataDef = `erDiagram
+  SET ||--o| ARTIST : "slug(artist)"
+  SET ||--|| STAGE : "plays on"
+  SET {
+    string id "day-stage-slug"
+    string day
+    string start
+    string end
+  }
+  ARTIST {
+    string slug PK
+    string bio
+    string genre
+    string socials
+  }
+  POI {
+    string cat "stage·food·water·…"
+    float lat
+    float lon
+  }
+  FOOD {
+    string cuisine
+    string vendor
+  }`
+
+const timeDef = `flowchart LR
+  T["set clock time<br/>CDT · no offset"] --> R{"before 8 AM?"}
+  R -- yes --> P["belongs to the<br/>previous festival day"]
+  R -- no --> S["belongs to today"]`
+
+const featureDef = `mindmap
+  root((Roo '26))
+    Plan
+      Star sets
+      Overlaps + leave-by
+      Share link / QR
+      Calendar export
+    Map
+      Live distance
+      Food + bars
+      Crew sharing
+      Trail + compass
+      Rain radar
+    Live
+      Push reminders
+      Weather alerts
+      News + overrides
+    Insight
+      Anonymous analytics
+      Live dashboard`
 ---
 
 <!doctype html>
@@ -266,10 +317,12 @@ const deployDef = `flowchart LR
 						<tr><td><code>artists.json</code></td><td>115 artists — photo, bio, genre, socials, news.</td></tr>
 						<tr><td><code>food.json</code></td><td>71 official vendors grouped into 10 cuisines (directory).</td></tr>
 					</table>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={dataDef}></div></div>
 					<h3>Stable IDs &amp; share links</h3>
 					<p>Each set has a deterministic id <code>&#123;day&#125;-&#123;stage&#125;-&#123;slug(artist)&#125;</code>, used by the planner, share links, and live overrides. Share links carry the whole plan in the URL fragment: <code>#p=3!&lt;name&gt;!&lt;srcIdx…&gt;</code>, indexing <b>stable source order</b> (v3) so appending sets never shifts anyone's saved links; the older <code>2!</code> form is still decoded.</p>
 					<h3>Festival time</h3>
 					<p>All times are local CDT without offset; the "festival day" rolls over at <b>8 AM</b> (a 1 AM set still belongs to the night before). No timezone parsing — epoch math appends <code>-05:00</code>.</p>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={timeDef}></div></div>
 				</section>
 
 				<section id="features">
@@ -282,6 +335,7 @@ const deployDef = `flowchart LR
 						<div class="card"><h4>Weather</h4><p>NWS forecast + severe-alert banner, RainViewer radar overlay.</p></div>
 						<div class="card"><h4>Play</h4><p>Roo Quest, the Lil Roo pet, and a few easter eggs — passive, location-aware.</p></div>
 					</div>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={featureDef}></div></div>
 				</section>
 
 				<section id="push">
@@ -361,6 +415,7 @@ const deployDef = `flowchart LR
 						<span class="tag">TELEMETRY.md — analytics + queries</span>
 						<span class="tag">NEWS.md — alerts + autonomous loop</span>
 						<span class="tag">docs/festiverse-api-reverse-engineering.md</span>
+						<span class="tag">docs/project-overview.md — build journal</span>
 					</p>
 				</section>
 
