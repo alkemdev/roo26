@@ -127,7 +127,8 @@
 			"lon": -86.05143,
 			"cat": "entrance",
 			"emoji": "🗼",
-			"desc": "North pedestrian entrance at the Clock Tower."
+			"desc": "North pedestrian entrance at the Clock Tower.",
+			"anchor": true
 		},
 		{
 			"name": "Area 931 Entrance (SW)",
@@ -135,7 +136,8 @@
 			"lon": -86.0548,
 			"cat": "entrance",
 			"emoji": "🚪",
-			"desc": "Southwest pedestrian entrance to Centeroo (approx.)."
+			"desc": "Southwest pedestrian entrance to Centeroo (approx.).",
+			"anchor": true
 		},
 		{
 			"name": "East Toll & rideshare",
