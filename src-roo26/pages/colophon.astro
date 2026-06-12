@@ -2,7 +2,79 @@
 // /colophon — standalone technical writeup of Roo '26: architecture, stack,
 // design constraints, and the decisions behind it. Linked subtly from the Guide.
 // Self-contained (own HTML + CSS), no app shell, no framework.
+// Diagrams are Mermaid, defined here as strings (so Astro doesn't parse the {}).
 const built = new Date().toISOString().slice(0, 10)
+
+const archDef = `graph TB
+  subgraph client["📱 Client"]
+    APP["Installed PWA<br/>Astro build · _app.js · localStorage"]
+  end
+  subgraph edge["⚡ Cloudflare edge"]
+    W["roo26 Worker<br/>Static Assets + on-demand routes"]
+    CRON["roo-push cron<br/>every 5 min"]
+  end
+  subgraph store["🗄️ Storage"]
+    KV[("PUSH_KV<br/>push · news")]
+    D1[("D1<br/>telemetry log")]
+    AE[("Analytics Engine<br/>live stream")]
+    R2[("R2<br/>archive · opt")]
+  end
+  subgraph ext["🌐 External"]
+    PUSH["Web Push<br/>FCM · APNs"]
+    APIS["NWS · RainViewer<br/>Tradable Bits"]
+  end
+  APP -- static assets --> W
+  APP -- "/roo26-api/* · fetch + beacon" --> W
+  W --> KV & D1 & AE & R2
+  CRON -- reads --> KV
+  CRON --> PUSH
+  W -.-> APIS
+  CRON -.-> APIS`
+
+const pushDef = `sequenceDiagram
+  autonumber
+  participant C as Client (PWA)
+  participant W as roo26 Worker
+  participant K as PUSH_KV
+  participant R as roo-push cron
+  participant P as Push service
+  C->>C: subscribe — PushManager(VAPID public)
+  C->>W: POST /push {sub, reminders, stars}
+  W->>K: store record
+  Note over R,K: every 5 minutes
+  R->>K: list + read records
+  R->>R: VAPID JWT (ES256) + aes128gcm payload
+  R->>P: POST encrypted push
+  P-->>C: deliver notification`
+
+const newsDef = `flowchart LR
+  A["🤖 Research agents<br/>official · press · social"] --> B["🔎 Cross-reference<br/>≥2 sources"]
+  B --> C{"🎚️ Confidence?"}
+  C -- high --> H["✅ Auto-publish<br/>POST /news + targeted push"]
+  C -- medium --> M["📰 Publish to feed<br/>no push"]
+  C -- low --> L["⏸️ Hold for review"]
+  H --> O["⚡ Live schedule overlay<br/>badge · reminders · push"]`
+
+const telemDef = `flowchart LR
+  E["👆 Event<br/>tap · view · geo"] --> Q["📥 localStorage queue<br/>offline-safe"]
+  Q --> F["📡 Flush<br/>sendBeacon"]
+  F --> I["⚡ /roo26-api/t<br/>enrich request.cf"]
+  I --> AE["📈 Analytics Engine"]
+  I --> D1["🗄️ D1 log + snapshots"]
+  I --> R2["📦 R2 archive · opt"]`
+
+const syncDef = `flowchart LR
+  APK["📦 Festiverse APK"] --> HB["🔣 hermes-dec<br/>disassemble bundle"]
+  HB --> KEY["🔑 recover client key + host"]
+  KEY --> TB["🛰️ Tradable Bits<br/>/idols/events"]
+  TB --> DIFF["🔀 diff vs schedule.json"]
+  DIFF --> OV["⚡ override system<br/>auto-apply changes"]`
+
+const deployDef = `flowchart LR
+  G["git push → main"] --> WB["Workers Builds"]
+  WB --> AB["astro build"]
+  AB --> DEP["deploy roo26 Worker"]
+  RP["roo-push"] -. "manual: wrangler deploy" .-> DEP2["deploy cron Worker"]`
 ---
 
 <!doctype html>
@@ -86,50 +158,12 @@ const built = new Date().toISOString().slice(0, 10)
 			.callout.dec { border-left-color: var(--gld) }
 			.dl dt { font-weight: 700; color: #fff; margin-top: 0.7rem }
 			.dl dd { margin: 0.1rem 0 0; color: var(--mut); font-size: 0.9rem }
-			/* ── diagrams ── */
-			.diag { margin: 1.1rem 0 0.3rem }
-			.node { position: relative; background: linear-gradient(160deg, #1d1630, #181128); border: 1px solid var(--line); border-radius: 14px; padding: 0.75rem 0.95rem; transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s }
-			.node:hover { transform: translateY(-3px); border-color: #463879; box-shadow: 0 12px 28px rgba(124,92,255,0.18) }
-			.node .row { display: flex; align-items: center; gap: 0.6rem }
-			.node .ic { font-size: 1.15rem; flex: 0 0 auto }
-			.node b { display: block; font-size: 0.92rem }
-			.node span { color: var(--mut); font-size: 0.76rem }
-			.node.c-client { border-color: rgba(255,143,177,0.45) }
-			.node.c-edge { border-color: rgba(124,92,255,0.55); background: linear-gradient(160deg, #221a3e, #191230) }
-			.node.c-cron { border-color: rgba(255,209,102,0.45) }
-			.node.c-ext { border-color: rgba(61,220,151,0.4) }
-			.edge-hd { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap }
-			.edge-hd b { display: inline; font-size: 1rem }
-			.edge-hd .sub { color: var(--mut); font-size: 0.76rem }
-			.routes { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.65rem }
-			.route { font-family: var(--mono); font-size: 0.72rem; padding: 0.18rem 0.5rem; border-radius: 7px; background: #120c24; border: 1px solid var(--line); color: #c9b8ff }
-			.stores { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 0.7rem }
-			.stores .ic { display: block; margin-bottom: 0.15rem; font-size: 1.2rem }
-			.dual { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem }
-			@media (max-width: 560px) { .dual { grid-template-columns: 1fr } }
-			/* connectors (animated data-flow) */
-			.conn { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.4rem 0 }
-			.conn .lbls { display: flex; gap: 1.1rem; flex-wrap: wrap; justify-content: center }
-			.conn .l2 { font-family: var(--mono); font-size: 0.68rem; color: var(--mut) }
-			.conn .line { width: 2px; height: 20px; background: var(--line); border-radius: 2px; position: relative; overflow: hidden }
-			.conn .line::after { content: ''; position: absolute; left: 0; top: -60%; width: 100%; height: 60%; background: linear-gradient(180deg, transparent, var(--grn)); animation: flow 1.7s linear infinite }
-			@keyframes flow { to { top: 130% } }
-			/* flow / branch diagrams */
-			.flow { display: flex; align-items: stretch; gap: 0.5rem; flex-wrap: wrap }
-			.flow .step { flex: 1 1 130px; min-width: 118px; background: #160f29; border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.12rem; transition: transform 0.18s, border-color 0.18s }
-			.flow .step:hover { transform: translateY(-2px); border-color: #463879 }
-			.flow .step .ic { font-size: 1.05rem }
-			.flow .step b { font-size: 0.85rem }
-			.flow .step span { color: var(--mut); font-size: 0.73rem }
-			.flow .arr { align-self: center; color: var(--pur); font-size: 1.15rem; flex: 0 0 auto }
-			@media (max-width: 620px) { .flow { flex-direction: column } .flow .arr { transform: rotate(90deg); align-self: center } }
-			.branches { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 0.6rem; margin-top: 0.6rem }
-			.branch { border-radius: 10px; padding: 0.55rem 0.7rem; border: 1px solid var(--line) }
-			.branch b { font-size: 0.84rem; color: #fff }
-			.branch span { color: var(--mut); font-size: 0.74rem; display: block; margin-top: 0.1rem }
-			.branch.hi { border-left: 3px solid var(--grn); background: rgba(61,220,151,0.07) }
-			.branch.med { border-left: 3px solid var(--gld); background: rgba(255,209,102,0.06) }
-			.branch.lo { border-left: 3px solid #6b7280; background: rgba(107,114,128,0.07) }
+			/* ── mermaid diagrams ── */
+			.mermaid-wrap { margin: 1.1rem 0 0.3rem; overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: rgba(18,12,36,0.45); padding: 1.1rem 0.7rem }
+			.mermaid { display: flex; justify-content: center; min-width: min-content; visibility: hidden }
+			.mermaid[data-processed="true"] { visibility: visible }
+			.mermaid svg { max-width: 100%; height: auto }
+			.dgcap { text-align: center; font-size: 0.74rem; color: var(--mut); margin-top: 0.5rem }
 			/* at-a-glance stat strip */
 			.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 0.7rem; margin: 1.5rem 0 0 }
 			.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 13px; padding: 0.7rem 0.85rem }
@@ -208,34 +242,7 @@ const built = new Date().toISOString().slice(0, 10)
 
 				<section id="arch">
 					<h2><span class="n">03</span> Architecture</h2>
-					<div class="diag">
-						<div class="node c-client">
-							<div class="row"><span class="ic">📱</span><div><b>Installed PWA</b><span>Astro static build · _app.js · localStorage — works offline</span></div></div>
-						</div>
-						<div class="conn">
-							<div class="lbls"><span class="l2">static assets ↓</span><span class="l2">/roo26-api/* · fetch + sendBeacon ↓</span></div>
-							<div class="line"></div>
-						</div>
-						<div class="node c-edge">
-							<div class="edge-hd"><span class="ic">⚡</span><b>roo26 Worker</b><span class="sub">Cloudflare edge — Static Assets + on-demand routes</span></div>
-							<div class="routes">
-								<span class="route">ASSETS</span><span class="route">/t telemetry</span><span class="route">/news + overrides</span><span class="route">/push</span><span class="route">/stats</span><span class="route">/crew</span>
-							</div>
-						</div>
-						<div class="conn"><div class="line"></div></div>
-						<div class="stores">
-							<div class="node"><span class="ic">🔑</span><b>PUSH_KV</b><span>push · news</span></div>
-							<div class="node"><span class="ic">🗄️</span><b>D1</b><span>telemetry log</span></div>
-							<div class="node"><span class="ic">📈</span><b>Analytics Engine</b><span>live event stream</span></div>
-							<div class="node"><span class="ic">📦</span><b>R2</b><span>archive · optional</span></div>
-							<div class="node"><span class="ic">🌎</span><b>request.cf</b><span>geo enrich</span></div>
-						</div>
-						<div class="conn"><div class="lbls"><span class="l2">↕ shares PUSH_KV · reads every 5 min</span></div></div>
-						<div class="dual">
-							<div class="node c-cron"><div class="row"><span class="ic">⏰</span><div><b>roo-push cron</b><span>reminders + weather alerts → Web Push</span></div></div></div>
-							<div class="node c-ext"><div class="row"><span class="ic">🌐</span><div><b>External</b><span>Web Push (FCM/APNs) · NWS · RainViewer · Tradable Bits</span></div></div></div>
-						</div>
-					</div>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={archDef}></div></div>
 					<p>One <b>roo26</b> Worker is both the web server (Static Assets) and the API. It writes to KV (push subscriptions, the news doc), D1 (the durable telemetry log), and Analytics Engine (the live event stream), and enriches requests with Cloudflare's <code>request.cf</code> geo. The <b>roo-push</b> cron Worker shares the same KV namespace and fans out Web Push. There is no other backend.</p>
 				</section>
 
@@ -285,47 +292,21 @@ const built = new Date().toISOString().slice(0, 10)
 						<li><b>Severe weather</b> — NWS active alerts for the Farm, once per alert.</li>
 						<li><b>Targeted news</b> — schedule-change pushes go only to people who starred the affected set.</li>
 					</ul>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={pushDef}></div></div>
+					<p class="dgcap">The subscribe → store → dispatch handshake, all hand-rolled crypto.</p>
 				</section>
 
 				<section id="news">
 					<h2><span class="n">08</span> News &amp; live overrides</h2>
 					<p>A news/alerts feed renders as a top banner + a scrollable Guide strip + a detail modal with grouped source links. The trick: a news item can carry a structured <b>schedule change</b> (<code>time</code>/<code>stage</code>/<code>cancel</code>/<code>add</code>) that the client overlays onto the schedule live — a ⚡ badge, re-synced reminders, a targeted push — <b>as data, never a redeploy</b>. Canonical <code>schedule.json</code> is never rewritten.</p>
-					<div class="diag">
-						<div class="flow">
-							<div class="step"><span class="ic">🤖</span><b>Research agents</b><span>scan official · press · social</span></div>
-							<div class="arr">→</div>
-							<div class="step"><span class="ic">🔎</span><b>Cross-reference</b><span>≥2 independent sources</span></div>
-							<div class="arr">→</div>
-							<div class="step"><span class="ic">🎚️</span><b>Confidence</b><span>score per rubric</span></div>
-						</div>
-						<div class="branches">
-							<div class="branch hi"><b>High</b><span>auto-publish → POST /news + targeted push</span></div>
-							<div class="branch med"><b>Medium</b><span>publish to feed, no push</span></div>
-							<div class="branch lo"><b>Low</b><span>hold for review</span></div>
-						</div>
-					</div>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={newsDef}></div></div>
 					<p>An autonomous loop (a Claude Code routine) runs the playbook on a cadence, now diffing against the <i>official</i> feed (§10). Publishing is gated by an <code>ADMIN_KEY</code> secret. See <code>NEWS.md</code>.</p>
 				</section>
 
 				<section id="telemetry">
 					<h2><span class="n">09</span> Telemetry &amp; analytics</h2>
 					<p>An anonymous client SDK queues events in <code>localStorage</code> and flushes via <code>sendBeacon</code> / <code>fetch(keepalive)</code> — so a tap in a dead zone still lands when signal returns. The ingestion route fans out to three sinks, each optional:</p>
-					<div class="diag">
-						<div class="flow">
-							<div class="step"><span class="ic">👆</span><b>Event</b><span>tap · view · geo</span></div>
-							<div class="arr">→</div>
-							<div class="step"><span class="ic">📥</span><b>Queue</b><span>localStorage · offline-safe</span></div>
-							<div class="arr">→</div>
-							<div class="step"><span class="ic">📡</span><b>Flush</b><span>sendBeacon on interval / unload</span></div>
-							<div class="arr">→</div>
-							<div class="step"><span class="ic">⚡</span><b>/roo26-api/t</b><span>enrich w/ request.cf</span></div>
-						</div>
-						<div class="branches">
-							<div class="branch hi"><b>Analytics Engine</b><span>live aggregates · 90-day stream</span></div>
-							<div class="branch med"><b>D1</b><span>durable log + plan snapshots</span></div>
-							<div class="branch lo"><b>R2</b><span>NDJSON archive · optional</span></div>
-						</div>
-					</div>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={telemDef}></div></div>
 					<p>Server-side enrichment from <code>request.cf</code> (country/city/colo/device) plus a salted IP hash — never the raw IP. A password-gated live dashboard at <code>/roo26-api/stats</code> streams a real-time event feed, KPIs, recent users, and historical charts. See <code>TELEMETRY.md</code>.</p>
 				</section>
 
@@ -333,6 +314,7 @@ const built = new Date().toISOString().slice(0, 10)
 					<h2><span class="n">10</span> Official schedule sync</h2>
 					<p>The official Festiverse app has no public API. It was reverse-engineered from the published APK — an Expo/React Native app whose Hermes bytecode was disassembled (<code>hermes-dec</code>) to recover the baked config. The set-times come from <b>Tradable Bits</b>, fetchable with a public client key and <b>no user auth</b>:</p>
 					<pre>GET tradablebits.com/api/v1/idols/events?api_key=…&amp;performance_uid=… → 275 events</pre>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={syncDef}></div></div>
 					<p>We diff this against our schedule and auto-apply day-of changes through the override system (it's how <i>Wolfmother → Claire Rosinkranz</i> landed live). Full method, ethics, and the stage map: <code>docs/festiverse-api-reverse-engineering.md</code>.</p>
 				</section>
 
@@ -372,6 +354,7 @@ const built = new Date().toISOString().slice(0, 10)
 				<section id="ops">
 					<h2><span class="n">14</span> Deploy &amp; ops</h2>
 					<p><b>roo26</b> deploys via Workers Builds on every push to <code>main</code>. <b>roo-push</b> is deployed manually (<code>wrangler deploy</code>). Bindings: <code>PUSH_KV</code>, <code>DB</code> (D1), <code>ROO26_AE</code> (Analytics Engine), optional R2; VAPID public key as a var. Secrets: <code>VAPID_PRIVATE</code>, <code>ADMIN_KEY</code>, <code>STATS_KEY</code>.</p>
+					<div class="mermaid-wrap"><div class="mermaid" set:text={deployDef}></div></div>
 					<p>Companion docs in the repo:</p>
 					<p>
 						<span class="tag">README.md — file layout</span>
@@ -420,5 +403,49 @@ const built = new Date().toISOString().slice(0, 10)
 			)
 			rev.forEach((el) => ro.observe(el))
 </script>
+		<script>
+			// Mermaid, bundled by Vite (no CDN). Themed to match the page.
+			import mermaid from 'mermaid'
+			mermaid.initialize({
+				startOnLoad: false,
+				theme: 'base',
+				securityLevel: 'loose',
+				flowchart: { curve: 'basis', htmlLabels: true, padding: 12, nodeSpacing: 45, rankSpacing: 55 },
+				sequence: { mirrorActors: false, actorMargin: 55, messageFontSize: 13, noteFontSize: 12, width: 165 },
+				themeVariables: {
+					darkMode: true,
+					fontFamily: 'system-ui, -apple-system, sans-serif',
+					fontSize: '14px',
+					background: 'transparent',
+					primaryColor: '#1d1630',
+					primaryTextColor: '#ece7fb',
+					primaryBorderColor: '#7c5cff',
+					lineColor: '#9a8fc0',
+					secondaryColor: '#160f29',
+					tertiaryColor: '#120c24',
+					mainBkg: '#1d1630',
+					nodeBorder: '#5a4793',
+					clusterBkg: 'rgba(124,92,255,0.07)',
+					clusterBorder: '#463879',
+					titleColor: '#c9b8ff',
+					edgeLabelBackground: '#160f29',
+					noteBkgColor: '#221a3e',
+					noteTextColor: '#e7defc',
+					noteBorderColor: '#463879',
+					actorBkg: '#1d1630',
+					actorBorder: '#7c5cff',
+					actorTextColor: '#ece7fb',
+					actorLineColor: '#463879',
+					signalColor: '#b9aee0',
+					signalTextColor: '#cdbff0',
+					labelBoxBkgColor: '#160f29',
+					labelBoxBorderColor: '#463879',
+					labelTextColor: '#ece7fb',
+					loopTextColor: '#cdbff0',
+					sequenceNumberColor: '#0b0716',
+				},
+			})
+			mermaid.run({ querySelector: '.mermaid' })
+		</script>
 	</body>
 </html>
