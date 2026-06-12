@@ -19,5 +19,22 @@
 	// PUSH_KV — push-notification subscriptions (/roo26-api/push). The roo-push
 	// cron Worker binds the SAME namespace id. (Add ROO_KV here too to enable
 	// crew location sharing.)
-	"kv_namespaces": [{ "binding": "PUSH_KV", "id": "3ccb401a78cf4c62b7db381fa09ce5c7" }]
+	"kv_namespaces": [{ "binding": "PUSH_KV", "id": "3ccb401a78cf4c62b7db381fa09ce5c7" }],
+
+	// ── Telemetry (/roo26-api/t + /roo26-api/stats) ──
+	// Analytics Engine needs NO pre-provisioning — the dataset is created on the
+	// first writeDataPoint, so this is live the moment it deploys.
+	"analytics_engine_datasets": [{ "binding": "ROO26_AE", "dataset": "roo26_events" }]
+
+	// D1 (durable event log + plan snapshots) and R2 (raw archive) need real
+	// resource IDs that must EXIST before they can be declared here, or the deploy
+	// fails. Provision them once, then uncomment (see migrations/README + the
+	// runbook). The ingestion endpoint null-checks both, so they're inert until then.
+	//
+	// , "d1_databases": [{ "binding": "DB", "database_name": "roo26-analytics", "database_id": "<paste from: wrangler d1 create roo26-analytics>" }]
+	// , "r2_buckets": [{ "binding": "ARCHIVE", "bucket_name": "roo26-telemetry" }]
+	//
+	// STATS_KEY (gates /roo26-api/stats) is a secret — set it with:
+	//   wrangler secret put STATS_KEY      (or in the Cloudflare dashboard)
+	// Until set, the dashboard returns 401 (locked by default).
 }

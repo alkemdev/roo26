@@ -127,6 +127,142 @@ const store = {
 	},
 }
 
+// ───────────────────────── telemetry ─────────────────────────
+// Anonymous, offline-resilient usage analytics → /roo26-api/t. Events queue in
+// localStorage and flush via fetch(keepalive) / sendBeacon, so a tap in a
+// festival dead-zone still lands when signal returns. No accounts; a random
+// client id + per-tab session id. See the privacy note in the Guide. The trail
+// (🐾) is uploaded too — see logTrack(). Never throws into app code.
+const APP_VER = 'roo26-2026.06.12'
+const T_ENDPOINT = '/roo26-api/t'
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+const CID = store.get('cid', null) || (() => { const c = uuid(); store.set('cid', c); return c })()
+const FIRST_SEEN = store.get('first_seen', null) || (() => { const t = Date.now(); store.set('first_seen', t); return t })()
+const SID = uuid()
+const T_START = Date.now()
+let tq = store.get('tq', []) // offline event queue
+let tFlushing = false
+
+function tev(event, props = {}) {
+	try {
+		tq.push({ event, props, route: location.pathname, client_id: CID, session_id: SID, ts: Date.now(), app_ver: APP_VER })
+		if (tq.length > 1000) tq = tq.slice(-1000) // bound if offline for a long time
+		store.set('tq', tq)
+		if (tq.length >= 25) flushTelemetry()
+	} catch {}
+}
+
+// snapshot of the user's current selections/state — server upserts one row per
+// client so we can reconstruct everyone's final plan after the festival
+let tSnapTimer = null
+function tsnap() {
+	clearTimeout(tSnapTimer)
+	tSnapTimer = setTimeout(() => {
+		try {
+			tev('snapshot', {
+				name: typeof myDisplayName === 'function' ? myDisplayName() : undefined,
+				icon: store.get('myicon', null),
+				favs: Object.keys(state.favs || {}),
+				fav_count: Object.keys(state.favs || {}).length,
+				pins: (state.pins || []).length,
+				friends: (state.friends || []).length,
+				notif: store.get('notif', null),
+				locate: state.locatePref,
+			})
+			flushTelemetry()
+		} catch {}
+	}, 1500)
+}
+
+async function flushTelemetry(beacon = false) {
+	if (!tq.length || tFlushing) return
+	tFlushing = true
+	try {
+		// drain in batches of 100, but stop the moment a send fails (offline) so
+		// we never spin — the queue persists and the next trigger retries
+		while (tq.length) {
+			const batch = tq.slice(0, 100)
+			const payload = JSON.stringify({ v: 1, events: batch })
+			let ok = false
+			if (beacon && navigator.sendBeacon) {
+				ok = navigator.sendBeacon(T_ENDPOINT, new Blob([payload], { type: 'application/json' }))
+			} else {
+				const r = await fetch(T_ENDPOINT, { method: 'POST', headers: { 'content-type': 'application/json' }, body: payload, keepalive: true })
+				ok = r.ok
+			}
+			if (!ok) break
+			tq = tq.slice(batch.length)
+			store.set('tq', tq)
+			if (beacon) break // one beacon per lifecycle event; rest waits for next load
+		}
+	} catch {} finally {
+		tFlushing = false
+	}
+}
+
+// ── auto-capture: session, perf/web-vitals, errors, connectivity, lifecycle ──
+function initTelemetry() {
+	try {
+		const nav = navigator
+		const scr = screen || {}
+		tev('session_start', {
+			new: FIRST_SEEN > Date.now() - 5000,
+			returning: store.get('seen_before', false),
+			tab: state.tab,
+			standalone: matchMedia('(display-mode: standalone)').matches || nav.standalone === true,
+			ref: document.referrer || undefined,
+			lang: nav.language,
+			tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+			sw: nav.serviceWorker?.controller ? 1 : 0,
+			vw: innerWidth,
+			vh: innerHeight,
+			dpr: devicePixelRatio,
+			screen: `${scr.width}x${scr.height}`,
+			mem: nav.deviceMemory,
+			cores: nav.hardwareConcurrency,
+			conn: nav.connection?.effectiveType,
+			online: nav.onLine,
+		})
+		store.set('seen_before', true)
+
+		// performance / web vitals (best-effort; guarded)
+		addEventListener('load', () => {
+			try {
+				const t = performance.getEntriesByType('navigation')[0]
+				if (t) tev('perf', { ttfb: Math.round(t.responseStart), dcl: Math.round(t.domContentLoadedEventEnd), load: Math.round(t.loadEventEnd), type: t.type })
+			} catch {}
+			setTimeout(() => flushTelemetry(), 2500)
+		})
+		vital('largest-contentful-paint', (e) => tev('vital', { name: 'LCP', value: Math.round(e.startTime) }), true)
+		let cls = 0
+		vital('layout-shift', (e) => { if (!e.hadRecentInput) cls += e.value }, false)
+		vital('first-input', (e) => tev('vital', { name: 'INP', value: Math.round(e.processingStart - e.startTime) }), true)
+		addEventListener('pagehide', () => { if (cls) tev('vital', { name: 'CLS', value: +cls.toFixed(3) }) })
+
+		// errors
+		addEventListener('error', (e) => tev('error', { msg: String(e.message || '').slice(0, 200), src: e.filename, line: e.lineno }))
+		addEventListener('unhandledrejection', (e) => tev('error', { msg: String(e.reason?.message || e.reason || '').slice(0, 200), kind: 'promise' }))
+
+		// connectivity + lifecycle
+		addEventListener('online', () => { tev('net', { online: true }); flushTelemetry() })
+		addEventListener('offline', () => tev('net', { online: false }))
+		addEventListener('appinstalled', () => tev('pwa_install', {}))
+		document.addEventListener('visibilitychange', () => {
+			tev('visibility', { hidden: document.hidden, session_ms: Date.now() - T_START })
+			flushTelemetry(document.hidden) // beacon when going hidden
+		})
+		addEventListener('pagehide', () => { tev('session_end', { session_ms: Date.now() - T_START }); flushTelemetry(true) })
+
+		setInterval(() => flushTelemetry(), 10000)
+		flushTelemetry()
+	} catch {}
+}
+function vital(type, cb, once) {
+	try {
+		new PerformanceObserver((list) => { for (const e of list.getEntries()) cb(e) }).observe({ type, buffered: true })
+	} catch {}
+}
+
 const state = {
 	tab: document.documentElement.dataset.tab || 'schedule',
 	day: store.get('day', null) || currentFestDay() || SCHED.days[0].id,
@@ -192,6 +328,8 @@ function setFav(set, on) {
 	schedulePushSync() // keep push reminders in sync with your stars
 	if (state.tab === 'plan') renderPlan()
 	drawRoute()
+	tev('fav', { id: set.id, artist: set.artist, stage: set.stage?.id, day: set.day, area: typeof areaOf === 'function' ? areaOf(set.stage?.id) : undefined, on: !!on })
+	tsnap()
 }
 
 // ───────────────────────── router ─────────────────────────
@@ -219,6 +357,7 @@ function setTab(tab, push = true) {
 	}
 	// main is the scroll container (app-shell layout) — reset it, not the window
 	$('main')?.scrollTo({ top: 0 })
+	tev('route_view', { tab })
 }
 
 window.addEventListener('popstate', () => {
@@ -362,6 +501,7 @@ function renderStageChips() {
 			state.stage = id
 			renderStageChips()
 			renderSched()
+			tev('filter', { kind: 'stage', value: id })
 		})
 		return c
 	}
@@ -508,9 +648,18 @@ function refreshStatuses() {
 	renderPill()
 }
 
+let searchTrackTimer = null
 $('#searchBox').addEventListener('input', (e) => {
 	state.search = e.target.value
 	renderSched()
+	// log the query once it settles (not every keystroke); capture zero-result
+	clearTimeout(searchTrackTimer)
+	const q = e.target.value.trim()
+	if (q.length >= 2)
+		searchTrackTimer = setTimeout(() => {
+			const hits = $$('#schedList .set-row').length
+			tev('search', { q: q.slice(0, 60), hits })
+		}, 800)
 })
 
 $('#nowJump').addEventListener('click', () => {
@@ -538,6 +687,7 @@ hidePastBtn.addEventListener('click', () => {
 	store.set('hidepast', state.hidePast)
 	paintHidePast()
 	renderSched()
+	tev('filter', { kind: 'hide_past', value: state.hidePast })
 })
 paintHidePast()
 
@@ -900,12 +1050,13 @@ async function openShareHub() {
 	$('#qrName').textContent = `${myDisplayName()}'s Roo '26`
 	$('#qrWrap').hidden = false
 	document.body.style.overflow = 'hidden'
+	tev('share_open', { fav_count: Object.keys(state.favs).length })
 }
 $('#sharePlan').addEventListener('click', openShareHub)
 // short message — easy to text
-$('#shareLink').addEventListener('click', () => shareText(`Here's my ROO26 🌈 ${shareUrl}`))
+$('#shareLink').addEventListener('click', () => { tev('share', { kind: 'link' }); shareText(`Here's my ROO26 🌈 ${shareUrl}`) })
 // full set-by-set schedule + link
-$('#shareFull').addEventListener('click', () => shareText(planText() + '\nOpen it: ' + shareUrl))
+$('#shareFull').addEventListener('click', () => { tev('share', { kind: 'full' }); shareText(planText() + '\nOpen it: ' + shareUrl) })
 $('#qrClose').addEventListener('click', () => {
 	$('#qrWrap').hidden = true
 	document.body.style.overflow = ''
@@ -1031,6 +1182,7 @@ $('#notifSave').addEventListener('click', async () => {
 		await unsyncPush()
 		toast('Notifications off')
 	}
+	tev('notif_set', { on: notif.on, sets: notif.sets, weather: notif.weather, lead: notif.lead })
 })
 
 // importing a friend's plan from a shared link
@@ -1051,6 +1203,7 @@ function checkImport() {
 	if (!plan || (!plan.going.length && !plan.interested.length)) return
 	pendingImport = plan
 	renderImportPreview(plan)
+	tev('import_view', { from: plan.name, sets: plan.going.length })
 }
 
 // rich preview of an incoming shared plan — set list by day, overlaps flagged
@@ -1103,6 +1256,8 @@ $('#importSave').addEventListener('click', () => {
 	closeImport()
 	setTab('plan')
 	toast(`Saved ${plan.name}'s plan`)
+	tev('import_save', { from: plan.name, sets: plan.going.length }) // social graph: who saved whose plan
+	tsnap()
 })
 $('#importCancel').addEventListener('click', closeImport)
 $('#importWrap').addEventListener('click', (e) => {
@@ -1113,6 +1268,7 @@ $('#importWrap').addEventListener('click', (e) => {
 $('#icsPlan').addEventListener('click', () => {
 	const favs = SETS.filter((s) => favTier(s.id) > 0 && s.startMs)
 	if (!favs.length) return toast('Star some sets first!')
+	tev('ics_export', { count: favs.length })
 	const utc = (ms) => new Date(ms).toISOString().replace(/[-:]|\.\d{3}/g, '')
 	let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//roo26.alkem.dev//roo26//EN\r\n'
 	for (const s of favs) {
@@ -1327,6 +1483,7 @@ function renderPoiChips() {
 		tracksOn = !tracksOn
 		drawTracks()
 		renderPoiChips()
+		tev('tracks_toggle', { on: tracksOn, points: track.length })
 	})
 	const extraChips = []
 	if (crewAvailable) {
@@ -1647,6 +1804,8 @@ function placePin(lat, lon) {
 	drawPins()
 	toast(`${pin.emoji} ${pin.name} saved`)
 	renderNearest()
+	tev('pin_add', { emoji: pin.emoji, count: state.pins.length })
+	tsnap()
 }
 
 function drawPins() {
@@ -2164,6 +2323,7 @@ async function loadAlerts() {
 		const a = alerts[0]
 		$('#wxAlertText').textContent = `⚠️ ${a.event}${a.headline ? ' — ' + a.headline : ''}`
 		bar.hidden = false
+		tev('wx_alert_view', { event: a.event, severity: a.severity })
 		$('#wxAlertClose').onclick = () => {
 			dismissed.add(a.id)
 			sessionStorage.setItem('roo26:wxdismiss', JSON.stringify([...dismissed]))
@@ -2213,6 +2373,8 @@ function logTrack() {
 	}
 	lastLog = { t: now, lat, lon }
 	track.push([Math.round(now / 1000), +lat.toFixed(5), +lon.toFixed(5)])
+	tev('geo', { lat: +lat.toFixed(5), lon: +lon.toFixed(5), acc: state.pos.acc != null ? Math.round(state.pos.acc) : undefined }) // 🐾 trail upload
+
 	// keep storage bounded: thin old points, keep recent ones dense
 	if (track.length > 15000) track = track.filter((_, i) => i % 2 === 0 || i > track.length - 2000)
 	// persist at most every ~20s — serializing the whole array on every fix
@@ -2337,6 +2499,7 @@ function questFlag(id) {
 	toast(`${q.e} Quest complete: ${q.t}`)
 	renderQuest()
 	renderPet()
+	tev('quest', { id, done: Object.keys(quest.done).length, total: QUESTS.length })
 }
 
 function checkQuests() {
@@ -2444,6 +2607,7 @@ $('#helpWrap').addEventListener('click', (e) => {
 })
 
 // ───────────────────────── boot ─────────────────────────
+initTelemetry() // session_start + auto-capture (first, so it leads the session)
 renderDayTabs()
 renderStageChips()
 renderPoiChips()
@@ -2454,6 +2618,7 @@ renderFavCount()
 setTab(state.tab, false)
 loadAlerts()
 checkImport()
+tsnap() // capture the user's current plan on load
 window.addEventListener('hashchange', checkImport)
 
 setInterval(() => {
