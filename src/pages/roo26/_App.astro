@@ -1762,6 +1762,47 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	.map-zoomed-out .poi-lbl.lbl-minor {
 		display: none;
 	}
+	/* live "now playing" stage labels */
+	.poi-lbl .npl-stage {
+		display: block;
+	}
+	.poi-lbl .npl-now {
+		display: block;
+		color: #ff6a7c;
+		font-weight: 900;
+		font-size: 0.95em;
+		max-width: 8.5rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.poi-lbl .npl-next {
+		display: block;
+		color: #9a8fc0;
+		font-weight: 600;
+		font-size: 0.86em;
+		max-width: 8.5rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.poi-lbl.lbl-live {
+		border-color: #ff6a7c !important;
+		box-shadow: 0 0 12px rgba(255, 106, 124, 0.45) !important;
+	}
+	.poi-pin.pin-live {
+		border-color: #ff6a7c;
+		animation: pinpulse 1.5s ease-out infinite;
+	}
+	@keyframes pinpulse {
+		0% {
+			box-shadow: 0 0 0 0 rgba(255, 106, 124, 0.6);
+		}
+		70%,
+		100% {
+			box-shadow: 0 0 0 11px rgba(255, 106, 124, 0);
+		}
+	}
 	.user-dot {
 		position: relative;
 		width: 100%;
@@ -2044,6 +2085,18 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		color: var(--mut);
 		font-size: 0.76rem;
 		font-weight: 600;
+	}
+	.pop-tap {
+		cursor: pointer;
+		border-radius: 6px;
+		transition: background 0.15s;
+	}
+	.pop-tap:hover {
+		background: rgba(124, 92, 255, 0.16);
+	}
+	.pop-now.pop-tap::after {
+		content: ' ›';
+		opacity: 0.7;
 	}
 
 	/* ── bottom sheets (artist detail / pin / help) ── */

@@ -592,7 +592,7 @@ function nowCard(s, ncs) {
 
 function renderNowStrip() {
 	const now = Date.now()
-	const live = SETS.filter((s) => setStatus(s, now) === 'live')
+	const live = SETS.filter((s) => !s.cancelled && setStatus(s, now) === 'live')
 	const strip = $('#nowStrip')
 	strip.hidden = live.length === 0
 	if (live.length)
@@ -610,7 +610,7 @@ function renderUpNext(now = Date.now()) {
 	const strip = $('#upNextStrip')
 	const TAIL = 5 * 60e3 // drop an ongoing set once it's in its final 5 minutes
 	const items = SETS.filter((s) => {
-		if (!isFav(s.id) || !s.startMs) return false
+		if (!isFav(s.id) || s.cancelled || !s.startMs) return false
 		if (now < s.startMs) return s.startMs - now < 3 * 3600e3 // upcoming, within 3h
 		return now < (s.endMs ?? s.startMs + 3600e3) - TAIL // ongoing, still >5 min left
 	})
@@ -811,7 +811,7 @@ function renderPlan() {
 					el('div', { class: 'friends-at' }, '🤝 ', `${fhere.map((f) => f.name).join(', ')} here too`),
 				)
 			const next = daySets[i + 1]
-			if (next && s.endMs && next.startMs) {
+			if (next && !s.cancelled && !next.cancelled && s.endMs && next.startMs) {
 				if (next.startMs < s.endMs) {
 					frag.append(
 						el(
@@ -1114,7 +1114,7 @@ function pushReminders() {
 	const now = Date.now()
 	const out = []
 	for (const s of SETS) {
-		if (!isFav(s.id) || !s.startMs) continue
+		if (!isFav(s.id) || s.cancelled || !s.startMs) continue // no reminders for cancelled sets
 		const at = s.startMs - notif.lead * 60e3
 		if (at < now - 60e3) continue
 		out.push({
@@ -1285,7 +1285,7 @@ $('#importWrap').addEventListener('click', (e) => {
 
 // ── calendar export (.ics) — native reminders that work offline ──
 $('#icsPlan').addEventListener('click', () => {
-	const favs = SETS.filter((s) => favTier(s.id) > 0 && s.startMs)
+	const favs = SETS.filter((s) => favTier(s.id) > 0 && s.startMs && !s.cancelled)
 	if (!favs.length) return toast('Star some sets first!')
 	tev('ics_export', { count: favs.length })
 	const utc = (ms) => new Date(ms).toISOString().replace(/[-:]|\.\d{3}/g, '')
@@ -1419,7 +1419,11 @@ async function initMap() {
 
 	renderPoiChips()
 	probeCrew()
-	setTimeout(() => map.invalidateSize(), 60)
+	refreshNowPlaying()
+	setTimeout(() => {
+		map.invalidateSize()
+		refreshNowPlaying() // once markers have rendered (so pin/label classes apply)
+	}, 80)
 
 	// auto-locate: resume if the user had it on, or if permission is already granted
 	if (state.locatePref === true) startLocate(true)
@@ -1433,30 +1437,61 @@ async function initMap() {
 	}
 }
 
-// popups show description + what's on now / coming up at stages, and a
-// "Guide me" button that points the compass at this place.
+// live stage labels — show what's playing NOW (and what's next) right on each
+// stage marker, with a pulse, so you can read the whole field at a glance.
+function refreshNowPlaying() {
+	if (!map || !L) return
+	const now = Date.now()
+	const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c])
+	for (const stageId in stageMarkers) {
+		const m = stageMarkers[stageId]
+		const name = STAGES[stageId]?.name || stageId
+		const live = SETS.find((s) => s.stage.id === stageId && !s.cancelled && setStatus(s, now) === 'live')
+		const next = SETS.filter((s) => s.stage.id === stageId && !s.cancelled && s.startMs && s.startMs > now).sort((a, b) => a.startMs - b.startMs)[0]
+		let html = `<span class="npl-stage">${esc(name)}</span>`
+		if (live) html += `<span class="npl-now">● ${esc(live.artist)}</span>`
+		else if (next && next.startMs - now < 75 * 60e3) html += `<span class="npl-next">${untilLabel(next.startMs, now)} · ${esc(next.artist)}</span>`
+		m.setTooltipContent(html)
+		const tt = m.getTooltip()?.getElement()
+		if (tt) tt.classList.toggle('lbl-live', !!live)
+		const pin = m.getElement()?.querySelector('.poi-pin')
+		if (pin) pin.classList.toggle('pin-live', !!live)
+	}
+}
+
+// popups show description + what's on now / coming up at stages (from canonical
+// SETS, so overrides apply), and a "Guide me" button that aims the compass here.
+// Tapping an act opens the same artist sheet as the schedule view.
 function poiPopup(p) {
 	const emoji = p.emoji || POI_CATS[p.cat]?.emoji || '📍'
 	const wrap = el('div', {}, el('b', {}, p.name))
 	if (p.desc) wrap.append(el('div', { class: 'pop-desc' }, p.desc))
 	if (p.cat === 'stage' && p.stage) {
 		const now = Date.now()
-		const stageSets = SETS.filter((s) => s.stage.id === p.stage)
+		const stageSets = SETS.filter((s) => s.stage.id === p.stage && !s.cancelled)
 		const live = stageSets.find((s) => setStatus(s, now) === 'live')
-		const upcoming = stageSets.filter((s) => s.startMs && s.startMs > now).slice(0, live ? 2 : 3)
-		if (live)
-			wrap.append(el('div', { class: 'pop-now' }, `▶ NOW: ${live.artist} · until ${fmtTime(live.end)}`))
+		const upcoming = stageSets.filter((s) => s.startMs && s.startMs > now).sort((a, b) => a.startMs - b.startMs).slice(0, live ? 2 : 3)
+		const openFromPopup = (s) => {
+			map?.closePopup()
+			openSheet(s)
+		}
+		if (live) {
+			const n = el('div', { class: 'pop-now pop-tap' }, `▶ NOW: ${live.artist} · until ${fmtTime(live.end)}`)
+			n.addEventListener('click', () => openFromPopup(live))
+			wrap.append(n)
+		}
 		if (upcoming.length) {
 			const ev = el('div', { class: 'pop-events' }, el('div', { class: 'pop-ev-h' }, live ? 'Next up' : 'Coming up'))
-			for (const s of upcoming)
-				ev.append(
-					el(
-						'div',
-						{ class: 'pop-ev' },
-						el('span', { class: 'pe-a' }, s.artist),
-						el('span', { class: 'pe-t' }, `${fmtTime(s.start)} · ${untilLabel(s.startMs, now)}`),
-					),
+			for (const s of upcoming) {
+				const row = el(
+					'div',
+					{ class: 'pop-ev pop-tap' },
+					el('span', { class: 'pe-a' }, s.artist),
+					el('span', { class: 'pe-t' }, `${fmtTime(s.start)} · ${untilLabel(s.startMs, now)}`),
 				)
+				row.addEventListener('click', () => openFromPopup(s))
+				ev.append(row)
+			}
 			wrap.append(ev)
 		}
 		if (!live && !upcoming.length) wrap.append(el('div', { class: 'pop-next' }, 'no more sets here — 🌈'))
@@ -1739,7 +1774,7 @@ function drawRoute() {
 	if (!routeOn) return
 	const today = currentFestDay() || state.day
 	const going = SETS.filter(
-		(s) => s.day === today && favTier(s.id) === 2 && s.startMs && STAGE_POI[s.stage.id],
+		(s) => s.day === today && favTier(s.id) === 2 && !s.cancelled && s.startMs && STAGE_POI[s.stage.id],
 	)
 	// collapse consecutive sets at the same stage into single waypoints
 	const pts = []
@@ -2441,7 +2476,7 @@ let petSvg = null
 
 function petMood() {
 	const h = (Date.now() - pet.water) / 3600e3
-	const liveGoing = SETS.some((s) => favTier(s.id) === 2 && setStatus(s) === 'live')
+	const liveGoing = SETS.some((s) => favTier(s.id) === 2 && !s.cancelled && setStatus(s) === 'live')
 	if (liveGoing && h < 1.5) return 'party'
 	if (h < 1.5) return 'happy'
 	if (h < 3) return 'thirsty'
@@ -2662,9 +2697,15 @@ async function loadNews() {
 			}
 		}
 		if (changed) {
+			// canonical SETS were mutated by an override — refresh every consuming view
 			SETS.sort((a, b) => (a.startMs ?? Infinity) - (b.startMs ?? Infinity))
 			renderSched()
-			renderNowStrip()
+			renderNowStrip() // includes Up Next
+			if (state.tab === 'plan') renderPlan()
+			if (map) {
+				refreshNowPlaying()
+				drawRoute()
+			}
 			schedulePushSync() // keep reminders aligned with the new times
 		}
 		renderNewsStrip()
@@ -3017,6 +3058,7 @@ setInterval(() => {
 	refreshStatuses()
 	checkQuests()
 	if (state.tab === 'info') renderPet()
+	if (state.tab === 'map') refreshNowPlaying()
 }, 30e3)
 setInterval(loadAlerts, 10 * 60e3)
 
