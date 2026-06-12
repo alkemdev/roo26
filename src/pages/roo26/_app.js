@@ -1016,6 +1016,17 @@ async function spReq(api, path, opts = {}, tries = 4) {
 	return null
 }
 
+// readable reason from a Spotify error response (for the status popup)
+async function spErr(res) {
+	if (!res) return 'no response'
+	try {
+		const j = await res.json()
+		return `${res.status}: ${j?.error?.message || j?.error?.reason || j?.error || 'error'}`
+	} catch {
+		return String(res.status)
+	}
+}
+
 async function buildSpotifyPlaylist() {
 	if (!SPOTIFY_CLIENT_ID) return
 	const fav = SETS.filter((s) => isFav(s.id))
@@ -1060,7 +1071,7 @@ async function buildSpotifyPlaylist() {
 		const meRes = await spReq(api, '/me')
 		const me = meRes?.ok ? await meRes.json().catch(() => null) : null
 		if (!me?.id) return spStatus('Spotify is being slow right now — close this and try again.', 0)
-		const plRes = await spReq(api, `/users/${me.id}/playlists`, {
+		let plRes = await spReq(api, `/users/${encodeURIComponent(me.id)}/playlists`, {
 			method: 'POST',
 			body: JSON.stringify({
 				name: "My Roo '26 🌈",
@@ -1068,7 +1079,12 @@ async function buildSpotifyPlaylist() {
 				public: false,
 			}),
 		})
-		const pl = plRes?.ok ? await plRes.json().catch(() => null) : null
+		if (!plRes?.ok) {
+			// auth/scope problem → drop the token so the next tap re-authorizes fresh
+			if (plRes && (plRes.status === 401 || plRes.status === 403)) store.del('spotify')
+			return spStatus(`Couldn’t create the playlist (${await spErr(plRes)}). Close this and tap 🎵 again.`, 0)
+		}
+		const pl = await plRes.json().catch(() => null)
 		if (!pl?.id) return spStatus('Couldn’t create the playlist — close this and try again.', 0)
 		// add tracks in batches; tolerate a failed batch and keep going
 		let added = 0
