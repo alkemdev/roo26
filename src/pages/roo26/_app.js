@@ -1572,9 +1572,7 @@ function renderPoiChips() {
 	}
 	wrap.replaceChildren(
 		...extraChips,
-		radarChip,
 		routeChip,
-		tracksChip,
 		...Object.entries(POI_CATS)
 			.filter(([, def]) => !def.always) // orientation layers have no chip
 			.map(([id, def]) => {
@@ -1590,6 +1588,9 @@ function renderPoiChips() {
 				})
 				return c
 			}),
+		// extras that aren't location categories live at the tail, off by default
+		radarChip,
+		tracksChip,
 	)
 	// when Food & drinks is on, offer the full vendor list (most vendors aren't
 	// individually pinned, so this is the "what else is here" reference)
@@ -1700,36 +1701,76 @@ function stopCrew() {
 }
 
 // — live precipitation radar (RainViewer free tiles) —
-let radarLayer = null
-let radarTimer = null
+// Animated precipitation radar (RainViewer). We preload every frame (recent past +
+// short-term nowcast) as its own tile layer and cross-fade through them on a loop, so
+// it's obvious the radar is live even when there's no rain over the farm. A small badge
+// shows the frame time so a clear sky reads as "no rain right now," not "broken."
+let radarFrames = [] // [{ layer, time, forecast }]
+let radarIdx = 0
+let radarAnim = null // animation tick
+let radarRefresh = null // periodic re-fetch
+let radarBadge = null
 
 async function showRadar() {
 	if (!map) return
 	try {
 		const meta = await (await fetch('https://api.rainviewer.com/public/weather-maps.json')).json()
-		const frames = meta?.radar?.past
-		if (!frames?.length) throw new Error('no frames')
-		const path = frames.at(-1).path
-		if (radarLayer) radarLayer.remove()
-		radarLayer = L.tileLayer(`${meta.host}${path}/256/{z}/{x}/{y}/2/1_1.png`, {
-			opacity: 0.62,
-			maxZoom: 19,
-		}).addTo(map)
-		clearInterval(radarTimer)
-		radarTimer = setInterval(() => radarOn && showRadar(), 5 * 60e3)
+		const past = meta?.radar?.past || []
+		const nowcast = meta?.radar?.nowcast || []
+		const frames = [...past, ...nowcast]
+		if (!frames.length) throw new Error('no frames')
+		radarClearLayers()
+		radarFrames = frames.map((f) => ({
+			time: f.time,
+			forecast: nowcast.includes(f),
+			// scheme 4 (Weather Channel), smooth + snow, very readable
+			layer: L.tileLayer(`${meta.host}${f.path}/256/{z}/{x}/{y}/4/1_1.png`, {
+				opacity: 0,
+				maxZoom: 19,
+				zIndex: 300,
+				className: 'radar-tiles',
+			}).addTo(map),
+		}))
+		if (!radarBadge) {
+			radarBadge = el('div', { class: 'radar-badge' })
+			map.getContainer().appendChild(radarBadge)
+		}
+		radarIdx = 0
+		clearInterval(radarAnim)
+		radarAnim = setInterval(radarTick, 480)
+		radarTick()
+		clearInterval(radarRefresh)
+		radarRefresh = setInterval(() => radarOn && showRadar(), 5 * 60e3)
 	} catch {
 		toast('Radar unavailable right now')
 		radarOn = false
+		hideRadar()
 		renderPoiChips()
 	}
 }
 
+function radarTick() {
+	if (!radarFrames.length) return
+	radarFrames.forEach((fr, i) => fr.layer.setOpacity(i === radarIdx ? 0.72 : 0))
+	const fr = radarFrames[radarIdx]
+	const t = new Date(fr.time * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+	if (radarBadge) radarBadge.textContent = `🌧️ Radar · ${t}${fr.forecast ? ' (forecast)' : ''}`
+	radarIdx = (radarIdx + 1) % radarFrames.length
+}
+
+function radarClearLayers() {
+	radarFrames.forEach((fr) => fr.layer.remove())
+	radarFrames = []
+}
+
 function hideRadar() {
-	clearInterval(radarTimer)
-	radarTimer = null
-	if (radarLayer) {
-		radarLayer.remove()
-		radarLayer = null
+	clearInterval(radarAnim)
+	clearInterval(radarRefresh)
+	radarAnim = radarRefresh = null
+	radarClearLayers()
+	if (radarBadge) {
+		radarBadge.remove()
+		radarBadge = null
 	}
 }
 

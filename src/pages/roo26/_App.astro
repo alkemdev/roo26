@@ -1713,6 +1713,26 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	.leaflet-container {
 		font: inherit;
 	}
+	.radar-badge {
+		position: absolute;
+		left: 50%;
+		bottom: 0.7rem;
+		transform: translateX(-50%);
+		z-index: 600;
+		padding: 0.32rem 0.7rem;
+		border-radius: 999px;
+		background: rgba(18, 13, 29, 0.82);
+		border: 1px solid rgba(127, 212, 255, 0.4);
+		color: #cfeaff;
+		font-size: 0.72rem;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		pointer-events: none;
+		box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+	}
+	.radar-tiles {
+		transition: opacity 0.4s ease;
+	}
 	.leaflet-control-attribution {
 		background: rgba(18, 13, 29, 0.7) !important;
 		color: var(--dim) !important;

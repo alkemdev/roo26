@@ -1,0 +1,618 @@
+---
+// /survey — field surveyor tool (authoring only, noindex, NOT linked from nav).
+// Walk the farm, drop GPS points (with multi-sample averaging for accuracy), and
+// trace shapes (entrance/exit boundaries). Exports pois.json points + GeoJSON.
+// Self-contained: own HTML/CSS/JS, Leaflet from CDN (degrades to GPS+list offline).
+const built = new Date().toISOString().slice(0, 16).replace('T', ' ')
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+		<meta name="robots" content="noindex" />
+		<meta name="color-scheme" content="dark" />
+		<title>Roo '26 — Field Surveyor</title>
+		<link
+			rel="stylesheet"
+			href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+			integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+			crossorigin=""
+		/>
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg: #0b0716;
+				--panel: #16102a;
+				--panel2: #1d1638;
+				--line: #2b2150;
+				--txt: #ece7fb;
+				--mut: #9a8fc0;
+				--pur: #7c5cff;
+				--grn: #3ddc97;
+				--pnk: #ff6f9c;
+				--gld: #ffd166;
+				--blu: #46b3ff;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--txt);
+				font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+			}
+			body {
+				padding: env(safe-area-inset-top) 0.8rem calc(env(safe-area-inset-bottom) + 1rem);
+				max-width: 680px;
+				margin: 0 auto;
+			}
+			h1 {
+				font-size: 1.15rem;
+				margin: 0.8rem 0 0.2rem;
+			}
+			.sub {
+				color: var(--mut);
+				font-size: 0.78rem;
+				margin: 0 0 0.7rem;
+			}
+			.card {
+				background: var(--panel);
+				border: 1px solid var(--line);
+				border-radius: 14px;
+				padding: 0.8rem;
+				margin: 0.6rem 0;
+			}
+			.gps {
+				display: flex;
+				gap: 0.6rem;
+				align-items: center;
+				font-variant-numeric: tabular-nums;
+			}
+			.gps .dot {
+				width: 12px;
+				height: 12px;
+				border-radius: 50%;
+				background: #666;
+				flex: none;
+				box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.5);
+			}
+			.gps.live .dot {
+				background: var(--grn);
+				animation: pulse 1.8s infinite;
+			}
+			.gps.weak .dot {
+				background: var(--gld);
+			}
+			@keyframes pulse {
+				0% {
+					box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.5);
+				}
+				70% {
+					box-shadow: 0 0 0 9px rgba(61, 220, 151, 0);
+				}
+			}
+			.coord {
+				font-size: 0.82rem;
+				color: var(--mut);
+			}
+			.coord b {
+				color: var(--txt);
+				font-weight: 600;
+			}
+			#map {
+				height: 240px;
+				border-radius: 14px;
+				margin: 0.6rem 0;
+				border: 1px solid var(--line);
+				background: var(--panel2);
+			}
+			label {
+				display: block;
+				font-size: 0.72rem;
+				color: var(--mut);
+				margin: 0.5rem 0 0.2rem;
+				text-transform: uppercase;
+				letter-spacing: 0.04em;
+			}
+			input,
+			select,
+			textarea {
+				width: 100%;
+				background: var(--panel2);
+				border: 1px solid var(--line);
+				border-radius: 10px;
+				color: var(--txt);
+				padding: 0.6rem 0.7rem;
+				font: inherit;
+			}
+			.row {
+				display: flex;
+				gap: 0.5rem;
+			}
+			.row > * {
+				flex: 1;
+			}
+			.chk {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				margin: 0.6rem 0 0;
+				color: var(--mut);
+				font-size: 0.82rem;
+			}
+			.chk input {
+				width: auto;
+			}
+			button {
+				font: inherit;
+				border: 0;
+				border-radius: 11px;
+				padding: 0.7rem 0.9rem;
+				color: #120c22;
+				font-weight: 700;
+				cursor: pointer;
+			}
+			.b-drop {
+				width: 100%;
+				background: var(--grn);
+				font-size: 1.02rem;
+				margin-top: 0.7rem;
+			}
+			.b-drop:disabled {
+				opacity: 0.5;
+			}
+			.b-trace {
+				width: 100%;
+				background: var(--gld);
+				margin-top: 0.5rem;
+			}
+			.b-trace.on {
+				background: var(--pnk);
+				color: #fff;
+			}
+			.b-ghost {
+				background: transparent;
+				color: var(--txt);
+				border: 1px solid var(--line);
+				font-weight: 600;
+			}
+			.exp {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+			}
+			.exp button {
+				flex: 1;
+				min-width: 130px;
+				background: var(--pur);
+				color: #fff;
+			}
+			.exp button.danger {
+				background: transparent;
+				border: 1px solid #5a2740;
+				color: var(--pnk);
+				flex: 0 0 auto;
+				min-width: 0;
+			}
+			ul {
+				list-style: none;
+				margin: 0;
+				padding: 0;
+			}
+			li {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				padding: 0.5rem 0;
+				border-top: 1px solid var(--line);
+				font-size: 0.86rem;
+			}
+			li:first-child {
+				border-top: 0;
+			}
+			li .em {
+				font-size: 1.1rem;
+			}
+			li .nm {
+				flex: 1;
+				min-width: 0;
+			}
+			li .nm small {
+				display: block;
+				color: var(--mut);
+				font-size: 0.68rem;
+				font-variant-numeric: tabular-nums;
+			}
+			li .x {
+				background: transparent;
+				color: var(--mut);
+				border: 1px solid var(--line);
+				padding: 0.3rem 0.55rem;
+				font-weight: 600;
+			}
+			.empty {
+				color: var(--mut);
+				font-size: 0.82rem;
+				text-align: center;
+				padding: 0.6rem;
+			}
+			.count {
+				float: right;
+				color: var(--mut);
+				font-size: 0.78rem;
+			}
+			.toast {
+				position: fixed;
+				left: 50%;
+				bottom: 1.4rem;
+				transform: translateX(-50%) translateY(20px);
+				background: #221a3d;
+				border: 1px solid var(--line);
+				color: var(--txt);
+				padding: 0.6rem 1rem;
+				border-radius: 999px;
+				font-size: 0.85rem;
+				opacity: 0;
+				transition: 0.25s;
+				pointer-events: none;
+				z-index: 9999;
+			}
+			.toast.show {
+				opacity: 1;
+				transform: translateX(-50%) translateY(0);
+			}
+			.note {
+				font-size: 0.74rem;
+				color: var(--mut);
+				margin-top: 0.4rem;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>🛰️ Field Surveyor</h1>
+		<p class="sub">
+			Walk the farm, drop accurate points, trace entrance/exit shapes. Nothing leaves
+			your phone — export when done, paste into <code>pois.json</code>. Built {built}.
+		</p>
+
+		<div class="card">
+			<div class="gps" id="gps">
+				<span class="dot"></span>
+				<span id="gpsTxt">Getting your location…</span>
+			</div>
+			<div class="coord" id="coord"></div>
+		</div>
+
+		<div id="map"></div>
+
+		<div class="card">
+			<label for="nm">Name</label>
+			<input id="nm" placeholder="e.g. Water refill — by Which Stage" autocomplete="off" />
+			<div class="row">
+				<div>
+					<label for="cat">Category</label>
+					<select id="cat">
+						<option value="stage">🎸 Stage</option>
+						<option value="plaza">⛺ Plaza</option>
+						<option value="water" selected>💧 Water</option>
+						<option value="medical">⛑️ Medical</option>
+						<option value="food">🍔 Food &amp; drink</option>
+						<option value="utility">🚻 Restroom</option>
+						<option value="camp">🏕️ Camp</option>
+						<option value="landmark">🎡 Landmark</option>
+						<option value="entrance">🚪 Entrance</option>
+						<option value="other">📍 Other</option>
+					</select>
+				</div>
+			</div>
+			<label for="note">Note (optional)</label>
+			<input id="note" placeholder="anything worth remembering" autocomplete="off" />
+			<label class="chk"><input type="checkbox" id="avg" checked /> Average 6 GPS samples (more accurate, ~5s)</label>
+			<button class="b-drop" id="drop">📍 Drop point at my location</button>
+			<button class="b-trace" id="trace">▶ Trace a shape (walk the boundary)</button>
+			<p class="note" id="traceNote" hidden></p>
+		</div>
+
+		<div class="card">
+			<b>Recorded</b><span class="count" id="count">0</span>
+			<ul id="list"></ul>
+			<div class="empty" id="empty">Nothing yet — drop your first point.</div>
+		</div>
+
+		<div class="card">
+			<b>Export</b>
+			<p class="note">Points export as <code>pois.json</code> rows; shapes as GeoJSON.</p>
+			<div class="exp" style="margin-top:0.5rem">
+				<button id="copyPois">Copy points (pois.json)</button>
+				<button id="copyGeo">Copy GeoJSON</button>
+				<button id="download">Download .json</button>
+				<button class="danger" id="clear">Clear all</button>
+			</div>
+		</div>
+
+		<div class="toast" id="toast"></div>
+
+		<script
+			is:inline
+			src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+			integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+			crossorigin=""></script>
+		<script is:inline>
+			const $ = (s) => document.querySelector(s)
+			const EMO = {
+				stage: '🎸', plaza: '⛺', water: '💧', medical: '⛑️', food: '🍔',
+				utility: '🚻', camp: '🏕️', landmark: '🎡', entrance: '🚪', other: '📍',
+			}
+			const KEY = 'roo26_survey'
+			let feats = []
+			try {
+				feats = JSON.parse(localStorage.getItem(KEY) || '[]')
+			} catch (e) {}
+			const save = () => localStorage.setItem(KEY, JSON.stringify(feats))
+			const r6 = (n) => Math.round(n * 1e6) / 1e6
+
+			let last = null // last GPS fix {lat, lon, acc, t}
+			function toast(m) {
+				const t = $('#toast')
+				t.textContent = m
+				t.classList.add('show')
+				clearTimeout(toast._t)
+				toast._t = setTimeout(() => t.classList.remove('show'), 2200)
+			}
+
+			// — map (optional; tool still works if Leaflet/tiles fail to load) —
+			let map, meMark, meAcc, traceLine
+			const FARM = [35.4783, -86.0517]
+			if (window.L) {
+				map = L.map('map', { zoomControl: true }).setView(FARM, 15)
+				L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+					maxZoom: 19,
+					attribution: '© OpenStreetMap',
+				}).addTo(map)
+				traceLine = L.polyline([], { color: '#ff6f9c', weight: 4, dashArray: '6 6' }).addTo(map)
+			} else {
+				$('#map').style.display = 'none'
+			}
+			function drawFeats() {
+				if (!map) return
+				;(drawFeats._g || (drawFeats._g = L.layerGroup().addTo(map))).clearLayers()
+				for (const f of feats) {
+					if (f.type === 'point') {
+						L.marker([f.lat, f.lon])
+							.addTo(drawFeats._g)
+							.bindTooltip(EMO[f.cat] + ' ' + f.name, { permanent: false })
+					} else if (f.pts && f.pts.length > 1) {
+						const poly = f.pts.length > 2 ? L.polygon(f.pts, { color: '#ffd166', weight: 3, fillOpacity: 0.12 })
+							: L.polyline(f.pts, { color: '#ffd166', weight: 4 })
+						poly.addTo(drawFeats._g).bindTooltip(EMO[f.cat] + ' ' + f.name)
+					}
+				}
+			}
+
+			// — live GPS —
+			navigator.geolocation?.watchPosition(
+				(p) => {
+					last = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, t: Date.now() }
+					const g = $('#gps')
+					g.className = 'gps ' + (last.acc <= 12 ? 'live' : 'weak')
+					$('#gpsTxt').textContent = (last.acc <= 12 ? 'Good fix' : 'Weak fix') + ` · ±${Math.round(last.acc)} m`
+					$('#coord').innerHTML = `<b>${r6(last.lat)}</b>, <b>${r6(last.lon)}</b>`
+					$('#drop').disabled = false
+					if (map) {
+						const ll = [last.lat, last.lon]
+						if (!meMark) {
+							meMark = L.circleMarker(ll, { radius: 6, color: '#46b3ff', fillColor: '#46b3ff', fillOpacity: 1 }).addTo(map)
+							meAcc = L.circle(ll, { radius: last.acc, color: '#46b3ff', weight: 1, fillOpacity: 0.06 }).addTo(map)
+							map.setView(ll, 17)
+						} else {
+							meMark.setLatLng(ll)
+							meAcc.setLatLng(ll).setRadius(last.acc)
+						}
+					}
+					if (tracing) maybeTraceVertex()
+				},
+				() => {
+					$('#gpsTxt').textContent = 'Location blocked — enable GPS & reload'
+				},
+				{ enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 },
+			)
+
+			// — averaged capture: sample N fresh fixes, weight by 1/accuracy² —
+			function capture(n, done) {
+				if (!navigator.geolocation || n <= 1) return done(last)
+				const samples = []
+				$('#drop').textContent = `📡 Sampling… (0/${n})`
+				const id = navigator.geolocation.watchPosition(
+					(p) => {
+						samples.push({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy || 30 })
+						$('#drop').textContent = `📡 Sampling… (${samples.length}/${n})`
+						if (samples.length >= n) {
+							navigator.geolocation.clearWatch(id)
+							let sw = 0, la = 0, lo = 0, best = 999
+							for (const s of samples) {
+								const w = 1 / (s.acc * s.acc)
+								sw += w; la += s.lat * w; lo += s.lon * w; best = Math.min(best, s.acc)
+							}
+							$('#drop').textContent = '📍 Drop point at my location'
+							done({ lat: la / sw, lon: lo / sw, acc: best, t: Date.now() })
+						}
+					},
+					() => {
+						navigator.geolocation.clearWatch(id)
+						$('#drop').textContent = '📍 Drop point at my location'
+						done(last)
+					},
+					{ enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
+				)
+			}
+
+			$('#drop').onclick = () => {
+				if (!last) return toast('No GPS fix yet')
+				const name = $('#nm').value.trim() || EMO[$('#cat').value] + ' point ' + (feats.length + 1)
+				$('#drop').disabled = true
+				capture($('#avg').checked ? 6 : 1, (fix) => {
+					$('#drop').disabled = false
+					feats.push({
+						id: 'p' + Date.now(),
+						type: 'point',
+						name,
+						cat: $('#cat').value,
+						note: $('#note').value.trim(),
+						lat: r6(fix.lat),
+						lon: r6(fix.lon),
+						acc: Math.round(fix.acc),
+						ts: new Date().toISOString(),
+					})
+					save()
+					render()
+					$('#nm').value = ''
+					$('#note').value = ''
+					toast(`Saved “${name}” (±${Math.round(fix.acc)} m)`)
+				})
+			}
+
+			// — shape tracing: auto-add a vertex every time you move ≥4 m —
+			let tracing = false
+			let traceFeat = null
+			function dist(a, b) {
+				const R = 6371000, t = (d) => (d * Math.PI) / 180
+				const dla = t(b[0] - a[0]), dlo = t(b[1] - a[1])
+				const x = Math.sin(dla / 2) ** 2 + Math.cos(t(a[0])) * Math.cos(t(b[0])) * Math.sin(dlo / 2) ** 2
+				return 2 * R * Math.asin(Math.sqrt(x))
+			}
+			function maybeTraceVertex() {
+				if (!last) return
+				const ll = [r6(last.lat), r6(last.lon)]
+				const pts = traceFeat.pts
+				if (!pts.length || dist(pts[pts.length - 1], ll) >= 4) {
+					pts.push(ll)
+					if (traceLine) traceLine.setLatLngs(pts)
+					$('#traceNote').textContent = `Tracing “${traceFeat.name}” — ${pts.length} vertices, ${pathLen(pts)} m walked. Walk the boundary, then Finish.`
+				}
+			}
+			function pathLen(pts) {
+				let d = 0
+				for (let i = 1; i < pts.length; i++) d += dist(pts[i - 1], pts[i])
+				return Math.round(d)
+			}
+			$('#trace').onclick = () => {
+				if (!tracing) {
+					const name = $('#nm').value.trim() || prompt('Name this shape (e.g. "Main Arch entrance")')
+					if (!name) return
+					tracing = true
+					traceFeat = { id: 's' + Date.now(), type: 'shape', name, cat: $('#cat').value, note: $('#note').value.trim(), pts: [], ts: new Date().toISOString() }
+					$('#trace').textContent = '■ Finish shape'
+					$('#trace').classList.add('on')
+					$('#traceNote').hidden = false
+					$('#traceNote').textContent = 'Walking… stand at each corner a moment. Tap Finish when you’ve closed the loop.'
+					if (traceLine) traceLine.setLatLngs([])
+					maybeTraceVertex()
+				} else {
+					tracing = false
+					$('#trace').textContent = '▶ Trace a shape (walk the boundary)'
+					$('#trace').classList.remove('on')
+					$('#traceNote').hidden = true
+					if (traceFeat.pts.length >= 2) {
+						feats.push(traceFeat)
+						save()
+						render()
+						toast(`Saved shape “${traceFeat.name}” (${traceFeat.pts.length} pts)`)
+					} else {
+						toast('Shape needs at least 2 points — discarded')
+					}
+					traceFeat = null
+					if (traceLine) traceLine.setLatLngs([])
+					$('#nm').value = ''
+					$('#note').value = ''
+				}
+			}
+
+			// — list / render —
+			function render() {
+				const ul = $('#list')
+				ul.innerHTML = ''
+				$('#count').textContent = feats.length
+				$('#empty').style.display = feats.length ? 'none' : 'block'
+				feats.forEach((f) => {
+					const li = document.createElement('li')
+					const meta =
+						f.type === 'point'
+							? `${f.lat}, ${f.lon} · ±${f.acc} m`
+							: `${f.pts.length} pts · ${pathLen(f.pts)} m`
+					li.innerHTML = `<span class="em">${EMO[f.cat] || '📍'}</span><span class="nm">${esc(f.name)}<small>${meta}${f.note ? ' · ' + esc(f.note) : ''}</small></span>`
+					const x = document.createElement('button')
+					x.className = 'x'
+					x.textContent = '✕'
+					x.onclick = () => {
+						feats = feats.filter((z) => z.id !== f.id)
+						save()
+						render()
+					}
+					const go = document.createElement('button')
+					go.className = 'x'
+					go.textContent = '◎'
+					go.onclick = () => {
+						if (!map) return
+						f.type === 'point' ? map.setView([f.lat, f.lon], 18) : map.fitBounds(f.pts)
+					}
+					li.append(go, x)
+					ul.appendChild(li)
+				})
+				drawFeats()
+			}
+			const esc = (s) => (s || '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c])
+
+			// — exports —
+			function copy(text, msg) {
+				navigator.clipboard?.writeText(text).then(
+					() => toast(msg),
+					() => toast('Copy failed — long-press to select'),
+				)
+			}
+			$('#copyPois').onclick = () => {
+				const pts = feats.filter((f) => f.type === 'point').map((f) => {
+					const o = { name: f.name, lat: f.lat, lon: f.lon, cat: f.cat }
+					if (f.note) o.desc = f.note
+					return o
+				})
+				copy(JSON.stringify(pts, null, '\t'), `Copied ${pts.length} point(s)`)
+			}
+			$('#copyGeo').onclick = () => copy(JSON.stringify(geojson(), null, 2), 'Copied GeoJSON')
+			$('#download').onclick = () => {
+				const blob = new Blob([JSON.stringify({ points: feats.filter((f) => f.type === 'point'), shapes: feats.filter((f) => f.type === 'shape'), geojson: geojson() }, null, 2)], { type: 'application/json' })
+				const a = document.createElement('a')
+				a.href = URL.createObjectURL(blob)
+				a.download = `roo26-survey-${new Date().toISOString().slice(0, 10)}.json`
+				a.click()
+			}
+			function geojson() {
+				return {
+					type: 'FeatureCollection',
+					features: feats.map((f) => ({
+						type: 'Feature',
+						properties: { name: f.name, cat: f.cat, note: f.note || '', acc: f.acc },
+						geometry:
+							f.type === 'point'
+								? { type: 'Point', coordinates: [f.lon, f.lat] }
+								: f.pts.length > 2
+									? { type: 'Polygon', coordinates: [[...f.pts.map((p) => [p[1], p[0]]), [f.pts[0][1], f.pts[0][0]]]] }
+									: { type: 'LineString', coordinates: f.pts.map((p) => [p[1], p[0]]) },
+					})),
+				}
+			}
+			$('#clear').onclick = () => {
+				if (confirm('Delete ALL recorded points and shapes?')) {
+					feats = []
+					save()
+					render()
+				}
+			}
+
+			render()
+		</script>
+	</body>
+</html>
