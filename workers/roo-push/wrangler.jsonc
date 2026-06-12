@@ -1,0 +1,19 @@
+{
+	// roo-push — Roo '26 notification dispatcher (cron, every minute).
+	// Deploy:  cd workers/roo-push && npx wrangler deploy
+	// Secret:  npx wrangler secret put VAPID_PRIVATE   (the base64url private key)
+	// Bind the SAME KV namespace id the app's PUSH_KV uses.
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "roo-push",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-06-11",
+	"compatibility_flags": ["global_fetch_strictly_public"],
+	"triggers": { "crons": ["* * * * *"] },
+	"observability": { "enabled": true },
+	"vars": {
+		// public VAPID key — must match the one shipped in the client
+		"VAPID_PUBLIC": "BBteNy4hOwuxvaW6XSRbGW4Apg0yDseuKP6P94amzhfyum4JdExtofxPS3soOAg3POy3Ygp4DTH4C86lqwZXAkA",
+		"VAPID_SUBJECT": "mailto:brown.cade@gmail.com"
+	},
+	"kv_namespaces": [{ "binding": "PUSH_KV", "id": "<paste the roo26-push KV namespace id>" }]
+}

@@ -16,8 +16,13 @@
 	"observability": {
 		"enabled": true
 	}
-	// Crew location sharing (optional): create a KV namespace and uncomment to
-	// bind it. The app feature-detects via /roo26-api/health and hides the crew
-	// UI when ROO_KV is absent, so this stays off until you want it.
-	// "kv_namespaces": [{ "binding": "ROO_KV", "id": "<roo26-crew namespace id>" }]
+	// Optional KV bindings — each feature-detects and hides its UI when absent:
+	//  • ROO_KV   — crew location sharing (/roo26-api/health)
+	//  • PUSH_KV  — push-notification subscriptions (/roo26-api/push); the
+	//               roo-push cron Worker must bind the SAME namespace id.
+	// Create the namespace(s), then uncomment with the real id(s):
+	// "kv_namespaces": [
+	//   { "binding": "ROO_KV",  "id": "<roo26-crew namespace id>" },
+	//   { "binding": "PUSH_KV", "id": "<roo26-push namespace id>" }
+	// ]
 }

@@ -3,7 +3,7 @@
 // when there IS signal), cache-fallback when there isn't. Built assets and the
 // official festival maps are cached so the app + maps work with zero signal.
 const BASE = ''
-const CACHE = 'roo26-v6'
+const CACHE = 'roo26-v7'
 const PRECACHE = [
 	'/',
 	'/map',
@@ -74,4 +74,42 @@ self.addEventListener('fetch', (e) => {
 		)
 	}
 	// map tiles & weather API: live network only
+})
+
+// ───────────────────────── push notifications ─────────────────────────
+// payload: { title, body, url, tag }
+self.addEventListener('push', (e) => {
+	let d = {}
+	try {
+		d = e.data ? e.data.json() : {}
+	} catch {
+		d = { title: "Roo '26", body: e.data ? e.data.text() : '' }
+	}
+	e.waitUntil(
+		self.registration.showNotification(d.title || "Roo '26", {
+			body: d.body || '',
+			tag: d.tag || undefined, // same tag replaces, avoids dupes
+			renotify: !!d.tag,
+			icon: '/roo26-icon-192.png',
+			badge: '/roo26-icon-192.png',
+			data: { url: d.url || '/' },
+			vibrate: [60, 40, 60],
+		}),
+	)
+})
+
+self.addEventListener('notificationclick', (e) => {
+	e.notification.close()
+	const url = (e.notification.data && e.notification.data.url) || '/'
+	e.waitUntil(
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cls) => {
+			for (const c of cls) {
+				if ('focus' in c) {
+					c.navigate(url).catch(() => {})
+					return c.focus()
+				}
+			}
+			return self.clients.openWindow(url)
+		}),
+	)
 })

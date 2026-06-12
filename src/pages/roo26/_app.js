@@ -189,6 +189,7 @@ function setFav(set, on) {
 	saveFavs()
 	renderFavCount()
 	renderUpNext()
+	schedulePushSync() // keep push reminders in sync with your stars
 	if (state.tab === 'plan') renderPlan()
 	drawRoute()
 }
@@ -1082,6 +1083,128 @@ if ($('#spotifyPlan')) {
 	$('#spotifyPlan').addEventListener('click', buildSpotifyPlaylist)
 }
 spotifyOnLoad()
+
+// ───────────────────────── push notifications ─────────────────────────
+// Reminders for your starred sets (and severe-weather alerts) — fired by the
+// roo-push cron Worker so they land even with the app closed. Inert until the
+// PUSH_KV backend is bound; the 🔔 button only appears when it is.
+const VAPID_PUBLIC = 'BBteNy4hOwuxvaW6XSRbGW4Apg0yDseuKP6P94amzhfyum4JdExtofxPS3soOAg3POy3Ygp4DTH4C86lqwZXAkA'
+const notifSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+let pushAvailable = false
+let notif = store.get('notif', { sets: true, lead: 20, weather: true, on: false })
+
+function urlB64ToU8(b64) {
+	const s = (b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')
+	const raw = atob(s)
+	const out = new Uint8Array(raw.length)
+	for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
+	return out
+}
+
+if (notifSupported)
+	fetch('/roo26-api/push')
+		.then((r) => r.json())
+		.then((h) => {
+			pushAvailable = !!h.ok
+			if (pushAvailable) $('#notifBtn').hidden = false
+			if (pushAvailable && notif.on) syncPush()
+		})
+		.catch(() => {})
+
+async function getPushSub() {
+	const reg = await navigator.serviceWorker.ready
+	return (
+		(await reg.pushManager.getSubscription()) ||
+		(await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VAPID_PUBLIC) }))
+	)
+}
+
+// reminders from your starred sets, each at (start − lead minutes)
+function pushReminders() {
+	const now = Date.now()
+	const out = []
+	for (const s of SETS) {
+		if (!isFav(s.id) || !s.startMs) continue
+		const at = s.startMs - notif.lead * 60e3
+		if (at < now - 60e3) continue
+		out.push({
+			at,
+			title: `🎵 ${s.artist} in ${notif.lead} min`,
+			body: `${s.stage.name}${s.start ? ' · ' + fmtTime(s.start) : ''}`,
+			url: '/plan',
+			tag: 'set-' + s.id,
+		})
+	}
+	return out
+}
+
+async function syncPush() {
+	if (!pushAvailable || !notif.on) return
+	try {
+		const sub = await getPushSub()
+		await fetch('/roo26-api/push', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ action: 'subscribe', sub: sub.toJSON(), prefs: notif, reminders: pushReminders(), tz: TZ }),
+		})
+	} catch {}
+}
+async function unsyncPush() {
+	try {
+		const reg = await navigator.serviceWorker.ready
+		const sub = await reg.pushManager.getSubscription()
+		if (sub)
+			await fetch('/roo26-api/push', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action: 'unsubscribe', sub: sub.toJSON() }),
+			})
+	} catch {}
+}
+let pushSyncTimer
+function schedulePushSync() {
+	if (!pushAvailable || !notif.on) return
+	clearTimeout(pushSyncTimer)
+	pushSyncTimer = setTimeout(syncPush, 1500) // debounce rapid starring
+}
+
+function openNotif() {
+	$('#notifSets').checked = notif.sets
+	$('#notifWeather').checked = notif.weather
+	$('#notifLead').value = String(notif.lead)
+	const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone
+	$('#notifNote').textContent = ios
+		? 'On iPhone: add Roo ’26 to your Home Screen first (Share → Add to Home Screen), then turn this on.'
+		: 'You’ll be asked to allow notifications.'
+	$('#notifWrap').hidden = false
+}
+$('#notifBtn').addEventListener('click', openNotif)
+$('#notifClose').addEventListener('click', () => ($('#notifWrap').hidden = true))
+$('#notifWrap').addEventListener('click', (e) => {
+	if (e.target.id === 'notifWrap') $('#notifWrap').hidden = true
+})
+$('#notifSave').addEventListener('click', async () => {
+	notif = {
+		sets: $('#notifSets').checked,
+		weather: $('#notifWeather').checked,
+		lead: Number($('#notifLead').value) || 20,
+		on: $('#notifSets').checked || $('#notifWeather').checked,
+	}
+	store.set('notif', notif)
+	$('#notifWrap').hidden = true
+	if (notif.on) {
+		if (Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') {
+			notif.on = false
+			store.set('notif', notif)
+			return toast('Allow notifications to get reminders')
+		}
+		await syncPush()
+		toast('🔔 Notifications on')
+	} else {
+		await unsyncPush()
+		toast('Notifications off')
+	}
+})
 
 // importing a friend's plan from a shared link
 let pendingImport = null
