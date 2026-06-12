@@ -9,7 +9,11 @@ interface Env {
 	VAPID_PUBLIC: string // base64url 65-byte point (also shipped in the client)
 	VAPID_PRIVATE: string // base64url 32-byte private scalar (a secret)
 	VAPID_SUBJECT?: string // mailto: or https: contact
+	ADMIN_KEY?: string // gates /roo26-api/news — used by the schedule auto-sync
 }
+
+import OUR_SETS from '../sets.json'
+const OUR = new Set(OUR_SETS as string[])
 
 const WX_POINT = '35.4714,-86.0517' // the Farm
 
@@ -144,15 +148,119 @@ async function dispatch(env: Env) {
 	} while (cursor)
 }
 
+// ───────────────────── official schedule auto-sync ─────────────────────
+// Diffs the official Tradable Bits feed (the Festiverse app's backend; recovered
+// from the APK — see docs/) against the last snapshot and auto-applies day-of
+// TIME changes via /roo26-api/news. Pure data, no LLM — so it runs unattended on
+// this cron, 24/7, independent of any Claude session or device. Conservative:
+// only time changes on sets we actually have (a changed start on a still-present
+// feed entry) auto-apply; stage moves / cancels / adds are left to the
+// /sync-schedule skill (they carry spelling-mismatch risk).
+const TB_URL =
+	'https://tradablebits.com/api/v1/idols/events?api_key=0184f26f-2eee-4691-b981-95d49f563bfd&performance_uid=c98fc9b1-892c-4264-9400-30bc4dbd14ed'
+const FESTID: Record<string, string> = { '2026-06-11': 'thu', '2026-06-12': 'fri', '2026-06-13': 'sat', '2026-06-14': 'sun' }
+const FESTBASE: Record<string, string> = { thu: '2026-06-11', fri: '2026-06-12', sat: '2026-06-13', sun: '2026-06-14' }
+const VENUE: Record<string, string> = {
+	'ROO STAGE 1': 'what', 'ROO STAGE 2': 'which', 'ROO STAGE 3': 'this', 'ROO STAGE 4': 'that',
+	'ROO STAGE 5': 'other', 'ROO STAGE 6': 'where', 'ROO STAGE 8': 'when', 'ROO STAGE 9': 'groop', 'ROO STAGE 10': 'silent',
+}
+const slugName = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+const titleCase = (s: string) => (s || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
+function festDay(date: string, hm: string): string | null {
+	if (!date) return null
+	const h = parseInt((hm || '12:00').slice(0, 2)) || 12
+	const d = new Date(date + 'T12:00:00Z')
+	if (h < 8) d.setUTCDate(d.getUTCDate() - 1)
+	return FESTID[d.toISOString().slice(0, 10)] || null
+}
+function festDate(dayId: string, hm: string): string {
+	const d = new Date(FESTBASE[dayId] + 'T12:00:00Z')
+	if (parseInt(hm.slice(0, 2)) < 8) d.setUTCDate(d.getUTCDate() + 1)
+	return d.toISOString().slice(0, 10)
+}
+
+async function syncSchedule(env: Env, force = false): Promise<number> {
+	if (!env.ADMIN_KEY) return 0
+	const last = Number(await env.PUSH_KV.get('sched:last')) || 0
+	if (!force && Date.now() - last < 13 * 60e3) return 0 // ~every 15 min (cron is 5)
+	await env.PUSH_KV.put('sched:last', String(Date.now()))
+
+	let tb: any
+	try {
+		tb = await (await fetch(TB_URL, { headers: { 'user-agent': 'roo26-sync/1' } })).json()
+	} catch {
+		return 0
+	}
+	if (!Array.isArray(tb)) return 0
+
+	// current feed → setId: {start,end,artist,day,stage}, only for sets we track
+	const cur: Record<string, any> = {}
+	for (const e of tb) {
+		const fd = festDay(e.start_date || '', e.start_time || '')
+		const st = VENUE[e.venue_name]
+		if (!fd || !st) continue
+		const sid = `${fd}-${st}-${slugName(e.event_name)}`
+		if (!OUR.has(sid)) continue
+		cur[sid] = { start: e.start_time || '', end: e.end_time || '', artist: e.event_name, day: fd, stage: st }
+	}
+	const snap: Record<string, any> | null = await env.PUSH_KV.get('sched:snap', 'json')
+	await env.PUSH_KV.put('sched:snap', JSON.stringify(cur))
+	if (!snap) return 0 // first run: establish baseline only
+
+	let applied = 0
+	for (const sid in cur) {
+		const c = cur[sid]
+		const p = snap[sid]
+		if (!p || !c.start || !p.start || c.start === p.start) continue
+		const art = titleCase(c.artist)
+		const item = {
+			id: `autosync-${sid}-${c.start.replace(':', '')}`,
+			ts: Date.now(),
+			severity: 'info',
+			title: `${art} moved to ${c.start}`,
+			summary: `${art} now starts ${c.start} (${cap(c.day)} ${cap(c.stage)}) — was ${p.start}.`,
+			body: `• New time: ${c.start} (was ${p.start}).\n• Auto-synced from the official Festiverse schedule.`,
+			confidence: 0.9,
+			sources: 'Official Festiverse schedule · auto-sync',
+			tags: [slugName(c.artist)],
+			change: {
+				type: 'time',
+				setId: sid,
+				artist: art,
+				day: c.day,
+				start: `${festDate(c.day, c.start)}T${c.start}`,
+				end: c.end ? `${festDate(c.day, c.end)}T${c.end}` : undefined,
+				note: 'Official time update',
+			},
+		}
+		try {
+			await fetch('https://roo26.alkem.dev/roo26-api/news', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', 'x-admin-key': env.ADMIN_KEY },
+				body: JSON.stringify({ notify: true, item }),
+			})
+			applied++
+		} catch {}
+	}
+	return applied
+}
+
 export default {
 	async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
 		ctx.waitUntil(dispatch(env))
+		ctx.waitUntil(syncSchedule(env))
 	},
-	// manual trigger for testing: GET /run
+	// manual triggers for testing: GET /run (dispatch) · GET /sync (schedule sync)
 	async fetch(req: Request, env: Env) {
-		if (new URL(req.url).pathname === '/run') {
+		const p = new URL(req.url).pathname
+		if (p === '/run') {
 			await dispatch(env)
 			return new Response('dispatched')
+		}
+		if (p === '/sync') {
+			const n = await syncSchedule(env, true)
+			return new Response('schedule sync: ' + n)
 		}
 		return new Response('roo-push cron worker')
 	},
