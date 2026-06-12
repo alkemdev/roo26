@@ -992,6 +992,30 @@ $('#spotifyWrap').addEventListener('click', (e) => {
 	if (e.target.id === 'spotifyWrap') spClose()
 })
 
+// resilient request: retries transient failures (429 w/ Retry-After, 5xx,
+// network blips) with backoff. Returns the Response (caller checks .ok), or
+// null if it gave up — so one flaky call never aborts the whole build.
+async function spReq(api, path, opts = {}, tries = 4) {
+	for (let n = 0; n < tries; n++) {
+		try {
+			const r = await api(path, opts)
+			if (r.status === 429) {
+				const wait = Math.min(8, Number(r.headers.get('retry-after')) || 2 ** n)
+				await new Promise((res) => setTimeout(res, wait * 1000))
+				continue
+			}
+			if (r.status >= 500) {
+				await new Promise((res) => setTimeout(res, 2 ** n * 400))
+				continue
+			}
+			return r // 2xx/3xx/4xx — let the caller decide
+		} catch {
+			await new Promise((res) => setTimeout(res, 2 ** n * 400)) // network — retry
+		}
+	}
+	return null
+}
+
 async function buildSpotifyPlaylist() {
 	if (!SPOTIFY_CLIENT_ID) return
 	const fav = SETS.filter((s) => isFav(s.id))
@@ -1012,13 +1036,14 @@ async function buildSpotifyPlaylist() {
 		for (let i = 0; i < artists.length; i++) {
 			const a = artists[i]
 			spStatus(`Finding tracks — ${i + 1}/${artists.length} artists…`, 4 + (i / artists.length) * 66)
-			const r = await api(`/search?q=${encodeURIComponent(`artist:"${a.name}"`)}&type=track&limit=10&market=US`)
+			const r = await spReq(api, `/search?q=${encodeURIComponent(`artist:"${a.name}"`)}&type=track&limit=10&market=US`)
+			if (!r) continue // gave up after retries → just skip this artist
 			if (r.status === 401) {
 				authErr = true
 				break
 			}
 			if (!r.ok) continue
-			const items = (await r.json()).tracks?.items || []
+			const items = (await r.json().catch(() => ({}))).tracks?.items || []
 			const match = (t) =>
 				a.id ? t.artists?.some((x) => x.id === a.id) : t.artists?.some((x) => x.name.toLowerCase() === a.name.toLowerCase())
 			let mine = items.filter(match)
@@ -1030,29 +1055,40 @@ async function buildSpotifyPlaylist() {
 			return spStatus('Spotify session expired — close this and tap 🎵 again to sign back in.', 0)
 		}
 		const dedup = [...new Set(uris)]
-		if (!dedup.length) return spStatus('Couldn’t find tracks for your starred artists. Try again later.', 0)
+		if (!dedup.length) return spStatus('Couldn’t find tracks for your starred artists. Close this and try again.', 0)
 		spStatus('Creating your playlist…', 80)
-		const me = await (await api('/me')).json()
-		const pl = await (
-			await api(`/users/${me.id}/playlists`, {
-				method: 'POST',
-				body: JSON.stringify({
-					name: "My Roo '26 🌈",
-					description: `Warm-up for Bonnaroo 2026 — ${artists.length} artists from my plan @ roo26.alkem.dev`,
-					public: false,
-				}),
-			})
-		).json()
-		spStatus(`Adding ${dedup.length} tracks…`, 90)
-		for (let i = 0; i < dedup.length; i += 100)
-			await api(`/playlists/${pl.id}/tracks`, { method: 'POST', body: JSON.stringify({ uris: dedup.slice(i, i + 100) }) })
-		spStatus(`✅ Done — ${dedup.length} tracks from ${artists.length} artists!`, 100)
+		const meRes = await spReq(api, '/me')
+		const me = meRes?.ok ? await meRes.json().catch(() => null) : null
+		if (!me?.id) return spStatus('Spotify is being slow right now — close this and try again.', 0)
+		const plRes = await spReq(api, `/users/${me.id}/playlists`, {
+			method: 'POST',
+			body: JSON.stringify({
+				name: "My Roo '26 🌈",
+				description: `Warm-up for Bonnaroo 2026 — ${artists.length} artists from my plan @ roo26.alkem.dev`,
+				public: false,
+			}),
+		})
+		const pl = plRes?.ok ? await plRes.json().catch(() => null) : null
+		if (!pl?.id) return spStatus('Couldn’t create the playlist — close this and try again.', 0)
+		// add tracks in batches; tolerate a failed batch and keep going
+		let added = 0
+		for (let i = 0; i < dedup.length; i += 100) {
+			const batch = dedup.slice(i, i + 100)
+			spStatus(`Adding tracks — ${Math.min(i + batch.length, dedup.length)}/${dedup.length}…`, 90 + (i / dedup.length) * 9)
+			const ar = await spReq(api, `/playlists/${pl.id}/tracks`, { method: 'POST', body: JSON.stringify({ uris: batch }) })
+			if (ar?.ok) added += batch.length
+		}
 		const open = $('#spotifyOpen')
-		open.href = pl.external_urls.spotify
+		open.href = pl.external_urls?.spotify || `https://open.spotify.com/playlist/${pl.id}`
 		open.hidden = false
+		spStatus(
+			added ? `✅ Done — ${added} tracks from ${artists.length} artists!` : 'Playlist created, but tracks didn’t add — open it and tap 🎵 again.',
+			100,
+		)
 		questFlag('share')
 	} catch {
-		spStatus('Spotify hiccup — close this and try again.', 0)
+		// last-resort safety net — but if a playlist link exists, still offer it
+		spStatus('Spotify had a hiccup — close this and try again.', 0)
 	}
 }
 
