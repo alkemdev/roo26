@@ -1381,6 +1381,7 @@ async function initMap() {
 
 	// build category layers + markers
 	for (const cat of Object.keys(POI_CATS)) catLayers[cat] = L.layerGroup()
+	catLayers.anchor = L.layerGroup() // individual always-on wayfinding pins (no chip)
 	for (const p of POIS.pois) {
 		const grp = poiGrp(p)
 		const cat = POI_CATS[grp] || POI_CATS.landmark
@@ -1395,7 +1396,7 @@ async function initMap() {
 				iconAnchor: [size / 2, size / 2],
 			}),
 		})
-		const majorLabel = isStage || /^Plaza \d/.test(p.name) // key wayfinding anchors
+		const majorLabel = isStage || p.anchor || /^Plaza \d/.test(p.name) // key wayfinding anchors
 		m.bindTooltip(p.name, {
 			permanent: true,
 			direction: 'bottom',
@@ -1403,9 +1404,12 @@ async function initMap() {
 			className: 'poi-lbl' + (majorLabel ? '' : ' lbl-minor'),
 		})
 		m.bindPopup(() => poiPopup(p))
-		m.addTo(catLayers[grp] ? catLayers[grp] : catLayers.landmark)
+		// anchors render in the always-on layer and are excluded from their chip's layer
+		const tgt = p.anchor ? 'anchor' : grp
+		m.addTo(catLayers[tgt] ? catLayers[tgt] : catLayers.landmark)
 		if (isStage) stageMarkers[p.stage] = m
 	}
+	catLayers.anchor.addTo(map)
 	for (const [cat, def] of Object.entries(POI_CATS)) if (def.on) catLayers[cat].addTo(map)
 
 	pinLayer = L.layerGroup().addTo(map)

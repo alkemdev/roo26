@@ -84,7 +84,8 @@
 			"lon": -86.05166,
 			"cat": "landmark",
 			"emoji": "⛲",
-			"desc": "The classic mushroom fountain — center of Centeroo and the best meetup spot on the Farm."
+			"desc": "The classic mushroom fountain — center of Centeroo and the best meetup spot on the Farm.",
+			"anchor": true
 		},
 		{
 			"name": "Clock Tower & Ferris Wheel",
@@ -92,7 +93,8 @@
 			"lon": -86.0515,
 			"cat": "landmark",
 			"emoji": "🎡",
-			"desc": "By the Tower Entrance on the north edge (approx.)."
+			"desc": "By the Tower Entrance on the north edge (approx.).",
+			"anchor": true
 		},
 		{
 			"name": "Planet Roo",
@@ -115,8 +117,9 @@
 			"lat": 35.47227,
 			"lon": -86.04869,
 			"cat": "entrance",
-			"emoji": "🌈",
-			"desc": "Main pedestrian entrance under the rainbow arch. Wristband help + lockers + merch nearby."
+			"emoji": "🚪",
+			"desc": "Main pedestrian entrance under the rainbow arch. Wristband help + lockers + merch nearby.",
+			"anchor": true
 		},
 		{
 			"name": "Tower Entrance (N)",
