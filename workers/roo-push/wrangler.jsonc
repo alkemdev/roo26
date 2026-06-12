@@ -15,5 +15,5 @@
 		"VAPID_PUBLIC": "BBteNy4hOwuxvaW6XSRbGW4Apg0yDseuKP6P94amzhfyum4JdExtofxPS3soOAg3POy3Ygp4DTH4C86lqwZXAkA",
 		"VAPID_SUBJECT": "mailto:brown.cade@gmail.com"
 	},
-	"kv_namespaces": [{ "binding": "PUSH_KV", "id": "<paste the roo26-push KV namespace id>" }]
+	"kv_namespaces": [{ "binding": "PUSH_KV", "id": "3ccb401a78cf4c62b7db381fa09ce5c7" }]
 }

@@ -15,14 +15,9 @@
 	},
 	"observability": {
 		"enabled": true
-	}
-	// Optional KV bindings — each feature-detects and hides its UI when absent:
-	//  • ROO_KV   — crew location sharing (/roo26-api/health)
-	//  • PUSH_KV  — push-notification subscriptions (/roo26-api/push); the
-	//               roo-push cron Worker must bind the SAME namespace id.
-	// Create the namespace(s), then uncomment with the real id(s):
-	// "kv_namespaces": [
-	//   { "binding": "ROO_KV",  "id": "<roo26-crew namespace id>" },
-	//   { "binding": "PUSH_KV", "id": "<roo26-push namespace id>" }
-	// ]
+	},
+	// PUSH_KV — push-notification subscriptions (/roo26-api/push). The roo-push
+	// cron Worker binds the SAME namespace id. (Add ROO_KV here too to enable
+	// crew location sharing.)
+	"kv_namespaces": [{ "binding": "PUSH_KV", "id": "3ccb401a78cf4c62b7db381fa09ce5c7" }]
 }
