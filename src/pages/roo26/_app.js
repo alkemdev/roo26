@@ -454,22 +454,30 @@ function renderNowStrip() {
 	renderUpNext(now)
 }
 
-// your starred sets starting within the next few hours, with a live countdown
-// (and walk time from your location when 📍 is on)
+// your starred sets that are on now (with >5 min left) or starting within the
+// next few hours — live countdown + walk time from your location when 📍 is on
 function renderUpNext(now = Date.now()) {
 	const strip = $('#upNextStrip')
-	const upcoming = SETS.filter((s) => isFav(s.id) && s.startMs && s.startMs > now && s.startMs - now < 3 * 3600e3)
+	const TAIL = 5 * 60e3 // drop an ongoing set once it's in its final 5 minutes
+	const items = SETS.filter((s) => {
+		if (!isFav(s.id) || !s.startMs) return false
+		if (now < s.startMs) return s.startMs - now < 3 * 3600e3 // upcoming, within 3h
+		return now < (s.endMs ?? s.startMs + 3600e3) - TAIL // ongoing, still >5 min left
+	})
 		.sort((a, b) => a.startMs - b.startMs)
 		.slice(0, 5)
-	strip.hidden = upcoming.length === 0
-	if (!upcoming.length) return
+	strip.hidden = items.length === 0
+	if (!items.length) return
 	$('#upNextCards').replaceChildren(
-		...upcoming.map((s) => {
+		...items.map((s) => {
+			const live = now >= s.startMs
 			const ncs = el(
 				'span',
 				{ class: 'nc-s' },
 				`${s.stage.name} · `,
-				el('span', { class: 'nc-when' }, untilLabel(s.startMs, now)),
+				live
+					? el('span', { class: 'nc-when nc-live' }, `● on now${s.end ? ` · til ${fmtTime(s.end)}` : ''}`)
+					: el('span', { class: 'nc-when' }, untilLabel(s.startMs, now)),
 			)
 			if (state.pos && STAGE_POI[s.stage.id]) {
 				const w = fmtWalk(haversine(state.pos, STAGE_POI[s.stage.id]))
