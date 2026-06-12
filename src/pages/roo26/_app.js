@@ -403,7 +403,7 @@ function renderSched() {
 		const emptyMsg = state.search
 			? `No artists matching “${state.search}”.`
 			: state.stage === 'outeroo'
-				? 'Outeroo lineup (Plaza stages, Silent Disco, The Grove & late-night parties) is coming to the app soon.'
+				? 'No Outeroo sets this day.'
 				: 'Nothing here yet.'
 		list.replaceChildren(el('div', { class: 'empty-note' }, emptyMsg))
 		return
@@ -762,7 +762,9 @@ function encodePlan(name) {
 	SETS.forEach((s) => {
 		if (isFav(s.id)) going.push(s.srcIdx)
 	})
-	return `3!${encodeURIComponent(name)}!${going.join('.')}`
+	// encodeURIComponent leaves '!' literal, which would break the '!'-delimited
+	// format below, so escape it too. '%' is already encoded as %25.
+	return `3!${encodeURIComponent(name).replace(/!/g, '%21')}!${going.join('.')}`
 }
 
 function decodePlan(hash) {
@@ -1036,7 +1038,15 @@ let pendingImport = null
 function checkImport() {
 	const m = location.hash.match(/^#p=(.+)$/)
 	if (!m) return
-	const plan = decodePlan(decodeURI(m[1]))
+	// decodePlan does its own decodeURIComponent on the name; pass the raw hash
+	// (no decodeURI pre-pass — that double-decode corrupted/crashed on % and !).
+	// try/catch so a malformed link can never throw an uncaught URIError.
+	let plan = null
+	try {
+		plan = decodePlan(m[1])
+	} catch {
+		plan = null
+	}
 	history.replaceState({}, '', location.pathname)
 	if (!plan || (!plan.going.length && !plan.interested.length)) return
 	pendingImport = plan
@@ -2221,97 +2231,6 @@ addEventListener('visibilitychange', () => {
 		store.set('trackagg', trackAgg)
 	}
 })
-
-function renderTrip() {
-	const body = $('#tripBody')
-	const days = Object.entries(trackAgg).sort()
-	if (!days.length) {
-		body.replaceChildren(
-			el(
-				'div',
-				{ class: 'empty-note' },
-				'No trip data yet — turn on 📍 on the map and go wander. Your trail is logged only on this phone, never uploaded.',
-			),
-		)
-		return
-	}
-	const total = days.reduce((a, [, v]) => a + v.dist, 0)
-	const activeHours = days.reduce(
-		(a, [, v]) => a + Object.values(v.hours).filter((m) => m > 150).length,
-		0,
-	)
-	const stat = (n, l) => el('div', { class: 'trip-stat' }, el('b', {}, n), el('span', {}, l))
-	const frag = document.createDocumentFragment()
-	frag.append(
-		el(
-			'div',
-			{ class: 'trip-stats' },
-			stat((total / 1609.34).toFixed(1) + ' mi', 'walked'),
-			stat(Math.round(total / 0.762).toLocaleString(), 'est. steps'),
-			stat(activeHours + ' h', 'on the move'),
-			stat(track.length.toLocaleString(), 'GPS points'),
-		),
-	)
-	for (const [key, v] of days) {
-		const dayName = SCHED.days.find((d) => d.date === key)?.full || key
-		frag.append(el('div', { class: 'plan-day-h' }, dayName.toUpperCase()))
-		frag.append(
-			el(
-				'div',
-				{ class: 'trip-day-meta' },
-				`${(v.dist / 1609.34).toFixed(1)} mi · ~${Math.round(v.dist / 0.762).toLocaleString()} steps · out ${locTime(v.first)} → ${locTime(v.last)}`,
-			),
-		)
-		const max = Math.max(...Object.values(v.hours), 1)
-		const bars = el('div', { class: 'trip-bars' })
-		for (let h = 0; h < 24; h++) {
-			const m = v.hours[h] || 0
-			bars.append(
-				el('div', {
-					class: 'trip-bar' + (m === max && m > 0 ? ' peak' : ''),
-					title: `${h % 12 || 12}${h >= 12 ? 'PM' : 'AM'} — ${Math.round(m)} m`,
-					style: `height:${m ? Math.max(7, (m / max) * 100) : 4}%`,
-				}),
-			)
-		}
-		frag.append(
-			bars,
-			el(
-				'div',
-				{ class: 'trip-axis' },
-				el('span', {}, '12a'),
-				el('span', {}, '6a'),
-				el('span', {}, '12p'),
-				el('span', {}, '6p'),
-				el('span', {}, '11p'),
-			),
-		)
-	}
-	frag.append(
-		el(
-			'div',
-			{ class: 'trip-foot' },
-			'Toggle 🐾 Tracks on the map to see your trail. Data lives only in this browser. ',
-			el(
-				'button',
-				{
-					class: 'tool-btn tool-danger',
-					onclick: () => {
-						if (!confirm('Delete all trip data?')) return
-						track = []
-						trackAgg = {}
-						lastLog = null
-						store.set('track', track)
-						store.set('trackagg', trackAgg)
-						renderTrip()
-					},
-				},
-				'Clear trip data',
-			),
-		),
-	)
-	body.replaceChildren(frag)
-}
 
 // ───────────────────────── Lil Roo: your festival pet ─────────────────────────
 const PET_NAMES = ['Bonnie', 'Roozy', 'Sprocket', 'Mango', 'Disco', 'Pebble', 'Waffle', 'Comet']

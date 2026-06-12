@@ -21,16 +21,16 @@ npm run preview
 | Path | Role |
 |---|---|
 | `src/pages/roo26/_App.astro` | The entire UI: HTML shell, markup, CSS. Props `tab` + `standalone`. |
-| `src/pages/roo26/_app.js` | All client logic: router, schedule, map, planner, trip, weather, share/QR/ICS, crew client. |
-| `src/pages/roo26/_data/*.json` | `schedule.json` (116 sets), `pois.json` (49 map POIs), `artists.json` (115 artists). |
-| `src-roo26/pages/{index,map,plan,trip,info}.astro` | Root-path route wrappers — each renders `<App tab="…" standalone />`. |
+| `src/pages/roo26/_app.js` | All client logic: router, schedule, map, planner, passive 🐾 Tracks logging, weather, share/QR/ICS, crew client. |
+| `src/pages/roo26/_data/*.json` | `schedule.json` (154 sets), `pois.json` (49 map POIs), `artists.json` (115 artists). |
+| `src-roo26/pages/{index,map,plan,info}.astro` | Root-path route wrappers — each renders `<App tab="…" standalone />`. |
 | `public/roo26-*` | Service worker, web manifests, icons, official festival maps. Filenames are referenced by absolute path in code — do not rename. |
 | `public/_headers` | Edge headers (immutable caching for `/_astro/*`, no-cache SW, baseline security). Honored by Workers Static Assets. |
 | `src-roo26/pages/roo26-api/[...path].ts` | On-demand Worker route for crew location sharing (`prerender = false`). Inert until a KV namespace is bound as `ROO_KV` in `wrangler.jsonc`; the client feature-detects via `/roo26-api/health` and hides the crew UI when absent. |
 | `wrangler.jsonc` | Cloudflare Workers config (Static Assets + `@astrojs/cloudflare`). |
 
 `astro.config.ts` sets `srcDir: './src-roo26'` so the wrappers become the
-routes (`/`, `/map`, `/plan`, `/trip`, `/info`); the app component and data live
+routes (`/`, `/map`, `/plan`, `/info`); the app component and data live
 outside `srcDir` under `src/pages/roo26/` and are imported, not routed.
 
 ## Deploy — Cloudflare Workers
@@ -69,8 +69,12 @@ once `/roo26-api/health` returns `{ok:true}`. No code change required.
   `roo26:track`, `roo26:trackagg`, `roo26:pet`, `roo26:quest`, `roo26:myname`,
   `roo26:locate`, `roo26:day`, `roo26:crew`): keep formats readable; ship a
   migration for any change.
-- **Share-link format** `#p=2!<name>!<idx…>!<idx…>` indexes into `SETS` sorted
-  by start time. Reordering `schedule.json` breaks old links.
+- **Share-link format** `#p=3!<name>!<srcIdx…>` indexes into `SETS` by stable
+  source/declaration order (`srcIdx`), so appending sets never shifts saved plans.
+  The legacy `2!<name>!<idx…>!<idx…>` form (indexed into a start-time-sorted,
+  Centeroo-only list) is still decoded for old links; reordering `schedule.json`
+  is safe for v3 but breaks those legacy v2 links. The name is `encodeURIComponent`'d
+  with `!` escaped to `%21`; import decode is wrapped so a malformed link can't throw.
 - **Set IDs** `${day}-${stageId}-${slug(artist)}`; `slug()` also keys
   `artists.json` — keep the two in lockstep.
 - **Times** are stored as local-CDT ISO without offset; epoch math appends

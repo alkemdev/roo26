@@ -23,13 +23,14 @@ passive trip tracking, NWS weather/alerts, offline PWA, and easter eggs. See
   Worker locally with `npx wrangler dev` (test routes + `/roo26-api/health`).
 
 ## Build & verify
-- 5 routes: `/`, `/map`, `/plan`, `/trip`, `/info` (clean no-slash URLs).
+- 4 routes: `/`, `/map`, `/plan`, `/info` (clean no-slash URLs).
 - App component: `src/pages/roo26/_App.astro` (UI + CSS) + `_app.js` (all logic) +
   `_data/*.json`. Route wrappers in `src-roo26/pages/`. Static assets in `public/`.
 - Crew backend: `src-roo26/pages/roo26-api/[...path].ts` (on-demand Worker route,
   `prerender = false`; needs KV `ROO_KV` bound in `wrangler.jsonc`).
 
 ## Invariants — don't break (details in README.md)
-- localStorage keys, the `#p=2!…` share-link format, set IDs `${day}-${stage}-${slug}`,
-  and festival-time handling (CDT, 8 AM day rollover). Reordering `schedule.json`
-  breaks old share links.
+- localStorage keys, the `#p=3!<name>!<srcIdx…>` share-link format (v2 `2!…` still
+  decoded for old links), set IDs `${day}-${stage}-${slug}`, and festival-time
+  handling (CDT, 8 AM day rollover). v3 indexes stable `srcIdx` values, so reordering
+  `schedule.json` is safe for v3 links but still breaks legacy v2 links.
