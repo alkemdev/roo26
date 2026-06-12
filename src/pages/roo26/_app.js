@@ -1315,16 +1315,17 @@ $('#icsPlan').addEventListener('click', () => {
 
 // ───────────────────────── map ─────────────────────────
 const POI_CATS = {
-	// always-on orientation layers (no chip — you don't toggle these off)
+	// the one always-on orientation layer (no chip — the map is about the stages)
 	stage: { label: 'Stages', emoji: '🎪', color: '#ff4f7b', on: true, always: true },
-	landmark: { label: 'Landmarks', emoji: '🎡', color: '#ff8bd2', on: true, always: true },
-	entrance: { label: 'Entrances', emoji: '🚪', color: '#ffb02e', on: true, always: true },
-	// the "find a thing" filters (the only chips)
-	food: { label: 'Food & drinks', emoji: '🍔', color: '#3ddc97', on: true },
+	// default-on safety layers
 	water: { label: 'Water', emoji: '💧', color: '#46b3ff', on: true },
 	medical: { label: 'Medical', emoji: '⛑️', color: '#ff5252', on: true },
+	// opt-in "find a thing" filters (off by default — keep the map sparse)
+	food: { label: 'Food & drinks', emoji: '🍔', color: '#3ddc97', on: false },
 	utility: { label: 'Restrooms', emoji: '🚻', color: '#8fa3ad', on: false },
-	camping: { label: 'Camping', emoji: '⛺', color: '#b08bff', on: true },
+	camping: { label: 'Camping', emoji: '⛺', color: '#b08bff', on: false },
+	landmark: { label: 'Landmarks', emoji: '🎡', color: '#ff8bd2', on: false },
+	entrance: { label: 'Entrances', emoji: '🚪', color: '#ffb02e', on: false },
 }
 
 let L = null // leaflet module, loaded lazily on first map view
