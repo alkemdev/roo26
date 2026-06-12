@@ -965,11 +965,11 @@ async function spotifyToken() {
 	}
 }
 
-const spApi = (access) => (path, opts = {}) =>
-	fetch(`https://api.spotify.com/v1${path}`, {
-		...opts,
-		headers: { authorization: `Bearer ${access}`, 'content-type': 'application/json', ...(opts.headers || {}) },
-	})
+const spApi = (access) => (path, opts = {}) => {
+	const headers = { authorization: `Bearer ${access}`, ...(opts.headers || {}) }
+	if (opts.body) headers['content-type'] = 'application/json' // avoid preflight on GETs
+	return fetch(`https://api.spotify.com/v1${path}`, { ...opts, headers })
+}
 
 async function buildSpotifyPlaylist() {
 	if (!SPOTIFY_CLIENT_ID) return
@@ -980,29 +980,44 @@ async function buildSpotifyPlaylist() {
 	toast('Building your Spotify playlist…')
 	try {
 		const api = spApi(access)
-		const ids = [...new Set(fav.map((s) => s.info?.id).filter(Boolean))] // unique artist IDs
+		// unique artists from your plan ({id?, name}); dedupe by id or name
+		const artists = [...new Map(fav.map((s) => [s.info?.id || s.artist.toLowerCase(), { id: s.info?.id, name: s.artist }])).values()]
+		// Spotify removed /artists/{id}/top-tracks for dev-mode apps, so find an
+		// artist's top tracks via Search (still allowed) and keep the ones that
+		// are actually by them. Bonus: works for Outeroo DJs with no stored ID.
 		const uris = []
-		for (const id of ids) {
-			const r = await api(`/artists/${id}/top-tracks?market=US`)
+		let authErr = false
+		for (const a of artists) {
+			const r = await api(`/search?q=${encodeURIComponent(`artist:"${a.name}"`)}&type=track&limit=10&market=US`)
+			if (r.status === 401) { authErr = true; break }
 			if (!r.ok) continue
-			const j = await r.json()
-			for (const t of (j.tracks || []).slice(0, 3)) uris.push(t.uri)
+			const items = (await r.json()).tracks?.items || []
+			const match = (t) =>
+				a.id ? t.artists?.some((x) => x.id === a.id) : t.artists?.some((x) => x.name.toLowerCase() === a.name.toLowerCase())
+			let mine = items.filter(match)
+			if (!mine.length) mine = items // last resort: best-relevance results
+			for (const t of mine.slice(0, 3)) uris.push(t.uri)
 		}
-		if (!uris.length) return toast('Couldn’t find tracks for your artists')
+		if (authErr) {
+			store.del('spotify')
+			return toast('Spotify session expired — tap 🎵 to sign in again')
+		}
+		const dedup = [...new Set(uris)]
+		if (!dedup.length) return toast('Couldn’t find tracks for your artists')
 		const me = await (await api('/me')).json()
 		const pl = await (
 			await api(`/users/${me.id}/playlists`, {
 				method: 'POST',
 				body: JSON.stringify({
 					name: "My Roo '26 🌈",
-					description: `Warm-up for Bonnaroo 2026 — ${ids.length} artists from my plan @ roo26.alkem.dev`,
+					description: `Warm-up for Bonnaroo 2026 — ${artists.length} artists from my plan @ roo26.alkem.dev`,
 					public: false,
 				}),
 			})
 		).json()
-		for (let i = 0; i < uris.length; i += 100)
-			await api(`/playlists/${pl.id}/tracks`, { method: 'POST', body: JSON.stringify({ uris: uris.slice(i, i + 100) }) })
-		toast(`🎵 Playlist ready — ${uris.length} tracks!`)
+		for (let i = 0; i < dedup.length; i += 100)
+			await api(`/playlists/${pl.id}/tracks`, { method: 'POST', body: JSON.stringify({ uris: dedup.slice(i, i + 100) }) })
+		toast(`🎵 Playlist ready — ${dedup.length} tracks!`)
 		window.open(pl.external_urls.spotify, '_blank')
 		questFlag('share')
 	} catch {
