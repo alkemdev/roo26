@@ -418,7 +418,7 @@ function setRow(set, showDay = false) {
 	const row = el(
 		'div',
 		{
-			class: `set-row is-${st}`,
+			class: `set-row is-${st}` + (set.ovr ? ' has-ovr' : '') + (set.cancelled ? ' is-cancelled' : ''),
 			style: `--sc:${set.stage.color}`,
 			'data-id': set.id,
 			role: 'button',
@@ -433,7 +433,12 @@ function setRow(set, showDay = false) {
 		el(
 			'div',
 			{ class: 'set-main' },
-			el('div', { class: 'set-artist' }, set.artist),
+			el(
+				'div',
+				{ class: 'set-artist' },
+				set.artist,
+				set.ovr ? el('span', { class: 'set-ovr-badge', title: set.ovr.note || 'Schedule updated' }, set.cancelled ? '⚡ CANCELLED' : '⚡ UPDATED') : null,
+			),
 			el(
 				'div',
 				{ class: 'set-meta' },
@@ -1123,7 +1128,14 @@ async function syncPush() {
 		await fetch('/roo26-api/push', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ action: 'subscribe', sub: sub.toJSON(), prefs: notif, reminders: pushReminders(), tz: TZ }),
+			body: JSON.stringify({
+				action: 'subscribe',
+				sub: sub.toJSON(),
+				prefs: notif,
+				reminders: pushReminders(),
+				stars: SETS.filter((s) => isFav(s.id)).map((s) => s.id), // for targeted news pushes
+				tz: TZ,
+			}),
 		})
 	} catch {}
 }
@@ -2606,6 +2618,169 @@ $('#helpWrap').addEventListener('click', (e) => {
 	if (e.target.id === 'helpWrap') closeHelp()
 })
 
+// ───────────────────────── news & alerts ─────────────────────────
+// Festival news + schedule-change feed from /roo26-api/news. Renders the Guide
+// news strip, the top banner, and the detail modal, and overlays any schedule
+// `change` onto SETS with a ⚡ badge. Auto-refreshes; fails silently offline.
+let NEWS = []
+const newsApplied = new Set()
+const newsDismissed = new Set(store.get('news_dismissed', []))
+
+async function loadNews() {
+	try {
+		const r = await fetch('/roo26-api/news', { cache: 'no-store' })
+		if (!r.ok) return
+		const doc = await r.json()
+		NEWS = (doc.items || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0))
+		let changed = false
+		for (const it of NEWS) {
+			if (it.change && !newsApplied.has(it.id)) {
+				if (applyChange(it)) changed = true
+				newsApplied.add(it.id)
+			}
+		}
+		if (changed) {
+			SETS.sort((a, b) => (a.startMs ?? Infinity) - (b.startMs ?? Infinity))
+			renderSched()
+			renderNowStrip()
+			schedulePushSync() // keep reminders aligned with the new times
+		}
+		renderNewsStrip()
+		renderNewsBanner()
+	} catch {}
+}
+
+// overlay a schedule change onto SETS; returns true if anything changed
+function applyChange(it) {
+	const c = it.change
+	let s = c.setId ? SET_BY_ID[c.setId] : null
+	if (!s && c.artist && c.day) s = SETS.find((x) => x.day === c.day && x.artist.toLowerCase() === c.artist.toLowerCase())
+	if (c.type === 'add') {
+		const id = c.setId || `${c.day}-${c.stage}-${slug(c.artist || 'tba')}`
+		if (SET_BY_ID[id]) return false
+		const stage = STAGES[c.stage] || { id: c.stage, name: c.stage || 'TBA', color: '#888', short: c.stage }
+		const ns = {
+			id, srcIdx: 9000 + SETS.length, artist: c.artist || 'TBA', day: c.day, stage,
+			start: c.start, end: c.end, startMs: c.start ? epoch(c.start) : null, endMs: c.end ? epoch(c.end) : null,
+			info: ARTISTS[slug(c.artist || '')] || null, ovr: { type: 'add', note: c.note, newsId: it.id, at: it.ts },
+		}
+		SETS.push(ns)
+		SET_BY_ID[id] = ns
+		return true
+	}
+	if (!s) return false
+	if (c.type === 'cancel') s.cancelled = true
+	if (c.type === 'time') {
+		if (c.start) { s.start = c.start; s.startMs = epoch(c.start) }
+		if (c.end) { s.end = c.end; s.endMs = epoch(c.end) }
+	}
+	if (c.type === 'stage') s.stage = STAGES[c.stage] || { id: c.stage, name: c.stage, color: '#888', short: c.stage }
+	s.ovr = { type: c.type, note: c.note, newsId: it.id, at: it.ts }
+	return true
+}
+
+const sevLabel = (s) => (s === 'urgent' ? '🚨 URGENT' : s === 'alert' ? '⚠️ ALERT' : '📣 NEWS')
+const linkIcon = (k) => (k === 'official' ? '🏛️' : k === 'press' ? '📰' : k === 'social' ? '💬' : k === 'source' ? '🔗' : '🌐')
+function timeAgo(ts) {
+	const m = Math.round((Date.now() - ts) / 60000)
+	if (m < 1) return 'just now'
+	if (m < 60) return m + 'm ago'
+	const h = Math.floor(m / 60)
+	return h < 24 ? h + 'h ago' : Math.floor(h / 24) + 'd ago'
+}
+
+function renderNewsStrip() {
+	const wrap = $('#newsStripWrap')
+	const strip = $('#newsStrip')
+	if (!wrap || !strip) return
+	wrap.hidden = NEWS.length === 0
+	strip.replaceChildren(
+		...NEWS.map((it) => {
+			const card = el(
+				'button',
+				{ class: `news-card sev-${it.severity}` },
+				el('div', { class: 'news-card-top' }, el('span', {}, sevLabel(it.severity)), el('span', {}, timeAgo(it.ts))),
+				el('div', { class: 'news-card-title' }, it.title),
+				el('div', { class: 'news-card-sum' }, it.summary || ''),
+			)
+			card.addEventListener('click', () => openNews(it.id))
+			return card
+		}),
+	)
+}
+
+function renderNewsBanner() {
+	const b = $('#newsBanner')
+	if (!b) return
+	const top = NEWS.find((it) => !newsDismissed.has(it.id))
+	if (!top) {
+		b.hidden = true
+		return
+	}
+	b.className = 'news-banner sev-' + top.severity
+	b.dataset.id = top.id
+	$('#newsBannerText').textContent = top.title
+	b.hidden = false
+}
+
+function openNews(id) {
+	const it = NEWS.find((x) => x.id === id)
+	if (!it) return
+	$('#newsModalSev').className = 'news-modal-sev sev-' + it.severity
+	$('#newsModalSev').textContent = sevLabel(it.severity)
+	$('#newsModalTitle').textContent = it.title
+	$('#newsModalMeta').textContent = [
+		new Date(it.ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+		it.sources ? '· ' + it.sources : '',
+		it.confidence != null ? `· ${Math.round(it.confidence * 100)}% confidence` : '',
+	].filter(Boolean).join(' ')
+	$('#newsModalBody').textContent = it.body || it.summary || ''
+	const groups = { official: 'Official', press: 'Press', social: 'Social posts', source: 'Sources', other: 'More' }
+	const wrap = $('#newsModalLinks')
+	wrap.replaceChildren()
+	for (const [kind, label] of Object.entries(groups)) {
+		const ls = (it.links || []).filter((l) => l.kind === kind)
+		if (!ls.length) continue
+		wrap.append(el('div', { class: 'news-link-group-h' }, label))
+		for (const l of ls)
+			wrap.append(
+				el('a', { class: 'news-link', href: l.url, target: '_blank', rel: 'noopener' },
+					el('span', { class: 'nl-ico' }, linkIcon(kind)), el('span', { class: 'nl-label' }, l.label), el('span', {}, '↗')),
+			)
+	}
+	newsDismissed.add(id)
+	store.set('news_dismissed', [...newsDismissed])
+	renderNewsBanner()
+	$('#newsWrap').hidden = false
+	document.body.style.overflow = 'hidden'
+	tev('news_open', { id, sev: it.severity })
+}
+function closeNews() {
+	$('#newsWrap').hidden = true
+	document.body.style.overflow = ''
+}
+
+function initNews() {
+	$('#newsClose')?.addEventListener('click', closeNews)
+	$('#newsWrap')?.addEventListener('click', (e) => {
+		if (e.target.id === 'newsWrap') closeNews()
+	})
+	$('#newsBanner')?.addEventListener('click', (e) => {
+		const id = $('#newsBanner').dataset.id
+		if (e.target.id === 'newsBannerX') {
+			if (id) {
+				newsDismissed.add(id)
+				store.set('news_dismissed', [...newsDismissed])
+				renderNewsBanner()
+			}
+			return
+		}
+		if (id) openNews(id)
+	})
+	loadNews()
+	setInterval(loadNews, 5 * 60e3)
+}
+
 // ───────────────────────── boot ─────────────────────────
 initTelemetry() // session_start + auto-capture (first, so it leads the session)
 renderDayTabs()
@@ -2617,6 +2792,7 @@ renderPill()
 renderFavCount()
 setTab(state.tab, false)
 loadAlerts()
+initNews() // festival news + schedule-change overlay
 checkImport()
 tsnap() // capture the user's current plan on load
 window.addEventListener('hashchange', checkImport)

@@ -60,6 +60,15 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 			</div>
 		</header>
 
+		<!-- most-recent news/alert — tap for the full story. Auto-shows when there's
+		     an undismissed item; severity drives the color. -->
+		<button class="news-banner" id="newsBanner" hidden>
+			<span class="news-banner-dot" id="newsBannerDot"></span>
+			<span class="news-banner-text" id="newsBannerText"></span>
+			<span class="news-banner-cta">Read ›</span>
+			<span class="news-banner-x" id="newsBannerX" role="button" aria-label="Dismiss">✕</span>
+		</button>
+
 		<div class="wx-alert" id="wxAlert" hidden>
 			<span id="wxAlertText"></span>
 			<button id="wxAlertClose" aria-label="Dismiss alert">✕</button>
@@ -135,6 +144,11 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 
 			<!-- ════════════ INFO ════════════ -->
 			<section class="view" id="view-info">
+				<!-- scrollable festival news/alerts feed (newest first) -->
+				<div class="news-strip-wrap" id="newsStripWrap" hidden>
+					<div class="news-strip-head">📣 Festival News &amp; Alerts</div>
+					<div class="news-strip" id="newsStrip"></div>
+				</div>
 				<div class="weather-card" id="weatherCard">
 					<div class="weather-head">
 						<h2>Weather on the Farm</h2>
@@ -460,6 +474,22 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 			</div>
 		</div>
 
+		<!-- news/alert detail modal: full description + grouped source links -->
+		<div class="sheet-wrap" id="newsWrap" hidden>
+			<div class="sheet pin-sheet news-sheet">
+				<div class="sheet-body">
+					<div class="news-modal-sev" id="newsModalSev"></div>
+					<h3 class="news-modal-title" id="newsModalTitle"></h3>
+					<p class="news-modal-meta" id="newsModalMeta"></p>
+					<div class="news-modal-body" id="newsModalBody"></div>
+					<div class="news-modal-links" id="newsModalLinks"></div>
+					<div class="sheet-actions">
+						<button class="sheet-btn" id="newsClose">Close</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<div class="toast" id="toast" hidden></div>
 
 		<script
@@ -635,6 +665,216 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		font-size: 1rem;
 		color: rgba(255, 255, 255, 0.8);
 		padding: 0.2rem 0.4rem;
+	}
+
+	/* ── news/alerts ── */
+	.news-banner {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		width: 100%;
+		padding: 0.5rem 0.9rem;
+		background: linear-gradient(90deg, #2b2150, #3a2d6b);
+		color: #f3eeff;
+		font-size: 0.82rem;
+		text-align: left;
+		border-bottom: 1px solid #160f2b;
+	}
+	.news-banner.sev-alert {
+		background: linear-gradient(90deg, #5a3a12, #7a5016);
+	}
+	.news-banner.sev-urgent {
+		background: linear-gradient(90deg, #8a1d2d, #b3541e);
+	}
+	.news-banner-dot {
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 50%;
+		background: #7ff0e0;
+		flex-shrink: 0;
+		box-shadow: 0 0 0 0 rgba(127, 240, 224, 0.7);
+		animation: newspulse 2s infinite;
+	}
+	.news-banner.sev-urgent .news-banner-dot {
+		background: #ffd2d2;
+	}
+	@keyframes newspulse {
+		70% {
+			box-shadow: 0 0 0 6px rgba(127, 240, 224, 0);
+		}
+	}
+	.news-banner-text {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 600;
+	}
+	.news-banner-cta {
+		flex-shrink: 0;
+		opacity: 0.85;
+		font-weight: 700;
+	}
+	.news-banner-x {
+		flex-shrink: 0;
+		padding: 0.1rem 0.35rem;
+		opacity: 0.7;
+		font-size: 0.95rem;
+	}
+	.news-strip-wrap {
+		margin: 0 0 1rem;
+	}
+	.news-strip-head {
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: #c9b8ff;
+		margin: 0 0 0.45rem;
+	}
+	.news-strip {
+		display: flex;
+		gap: 0.6rem;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scroll-snap-type: x mandatory;
+		padding-bottom: 0.3rem;
+	}
+	.news-strip::-webkit-scrollbar {
+		height: 5px;
+	}
+	.news-strip::-webkit-scrollbar-thumb {
+		background: var(--line);
+		border-radius: 99px;
+	}
+	.news-card {
+		scroll-snap-align: start;
+		flex: 0 0 78%;
+		max-width: 320px;
+		text-align: left;
+		background: var(--bg-2, #1d1630);
+		border: 1px solid var(--line);
+		border-left: 3px solid #7c5cff;
+		border-radius: 12px;
+		padding: 0.6rem 0.75rem;
+	}
+	.news-card.sev-alert {
+		border-left-color: #e0962a;
+	}
+	.news-card.sev-urgent {
+		border-left-color: #e0564a;
+	}
+	.news-card-top {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.5rem;
+		font-size: 0.68rem;
+		color: #9a8fc0;
+		margin-bottom: 0.2rem;
+	}
+	.news-card-title {
+		font-weight: 700;
+		font-size: 0.9rem;
+		line-height: 1.25;
+		margin: 0 0 0.15rem;
+	}
+	.news-card-sum {
+		font-size: 0.78rem;
+		color: #b9aee0;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.news-sheet {
+		max-height: 82vh;
+		overflow-y: auto;
+	}
+	.news-modal-sev {
+		display: inline-block;
+		font-size: 0.68rem;
+		font-weight: 800;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		padding: 0.15rem 0.5rem;
+		border-radius: 99px;
+		background: #2e2547;
+		color: #c9b8ff;
+		margin-bottom: 0.5rem;
+	}
+	.news-modal-sev.sev-alert {
+		background: #5a3a12;
+		color: #ffd9a8;
+	}
+	.news-modal-sev.sev-urgent {
+		background: #6e1722;
+		color: #ffd2d2;
+	}
+	.news-modal-title {
+		margin: 0 0 0.25rem;
+		font-size: 1.15rem;
+	}
+	.news-modal-meta {
+		font-size: 0.74rem;
+		color: #8a7fb0;
+		margin: 0 0 0.7rem;
+	}
+	.news-modal-body {
+		font-size: 0.9rem;
+		line-height: 1.5;
+		color: #ece7fb;
+		white-space: pre-wrap;
+	}
+	.news-modal-links {
+		margin-top: 0.9rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+	.news-link-group-h {
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: #9a8fc0;
+		margin: 0.5rem 0 0.1rem;
+	}
+	.news-link {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.65rem;
+		background: var(--bg-3, #241c3b);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		font-size: 0.82rem;
+		color: #d9caff;
+		text-decoration: none;
+	}
+	.news-link .nl-ico {
+		flex-shrink: 0;
+	}
+	.news-link .nl-label {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	/* ⚡ schedule-change badge on affected set rows */
+	.set-ovr-badge {
+		display: inline-block;
+		font-size: 0.62rem;
+		font-weight: 800;
+		padding: 0.05rem 0.35rem;
+		border-radius: 99px;
+		background: #4a2f12;
+		color: #ffce8a;
+		margin-left: 0.4rem;
+		vertical-align: middle;
+	}
+	.set-row.is-cancelled {
+		opacity: 0.5;
+	}
+	.set-row.is-cancelled .set-artist {
+		text-decoration: line-through;
 	}
 
 	main {

@@ -25,7 +25,16 @@
 	// Analytics Engine: live aggregate/time-series stream (account AE enabled).
 	"analytics_engine_datasets": [{ "binding": "ROO26_AE", "dataset": "roo26_events" }],
 	// D1: durable event log + per-device plan snapshots; powers /roo26-api/stats.
-	"d1_databases": [{ "binding": "DB", "database_name": "roo26-analytics", "database_id": "222001d7-2bb4-49d7-92fc-dfe62e0b59d1" }]
+	"d1_databases": [{ "binding": "DB", "database_name": "roo26-analytics", "database_id": "222001d7-2bb4-49d7-92fc-dfe62e0b59d1" }],
+
+	// ── News & alerts (/roo26-api/news) ── Web Push fires from the publish
+	// endpoint, so the public VAPID key + subject live here (the VAPID key is
+	// public — it's already shipped in the client). The matching VAPID_PRIVATE and
+	// ADMIN_KEY (gates publishing) are Worker secrets, set via `wrangler secret put`.
+	"vars": {
+		"VAPID_PUBLIC": "BBteNy4hOwuxvaW6XSRbGW4Apg0yDseuKP6P94amzhfyum4JdExtofxPS3soOAg3POy3Ygp4DTH4C86lqwZXAkA",
+		"VAPID_SUBJECT": "mailto:brown.cade@gmail.com"
+	}
 
 	// R2 raw archive is optional and needs R2 activated (payment method on file).
 	// To add it: `wrangler r2 bucket create roo26-telemetry`, then uncomment:

@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ request }) => {
 	} catch {
 		return json({ error: 'bad json' }, 400)
 	}
-	const { action, sub, prefs, reminders, tz } = body || {}
+	const { action, sub, prefs, reminders, stars, tz } = body || {}
 	if (!sub?.endpoint || typeof sub.endpoint !== 'string') return json({ error: 'no subscription' }, 400)
 	const key = await keyFor(sub.endpoint)
 
@@ -43,8 +43,11 @@ export const POST: APIRoute = async ({ request }) => {
 		.slice(0, 400)
 	const record = {
 		sub,
-		prefs: { sets: prefs?.sets !== false, lead: Number(prefs?.lead) || 20, weather: prefs?.weather !== false },
+		prefs: { sets: prefs?.sets !== false, lead: Number(prefs?.lead) || 20, weather: prefs?.weather !== false, news: prefs?.news !== false },
 		reminders: rem,
+		// starred set IDs — lets the news endpoint target schedule-change pushes to
+		// exactly the people affected. Bounded.
+		stars: (Array.isArray(stars) ? stars : []).filter((x) => typeof x === 'string').slice(0, 600),
 		tz: typeof tz === 'string' ? tz : '-05:00',
 		updatedAt: Date.now(),
 	}

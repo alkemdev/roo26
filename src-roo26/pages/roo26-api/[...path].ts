@@ -44,6 +44,107 @@ function deviceOf(ua: string): string {
 	return 'other'
 }
 
+// ───────────────────────── Web Push (RFC 8291 + 8292) ─────────────────────────
+// Same hand-rolled crypto as the roo-push cron Worker, so news/alert pushes can
+// fire instantly from the publish endpoint. Needs VAPID_PUBLIC (var) + the secret
+// VAPID_PRIVATE bound on this Worker.
+const b2bytes = (s: string) => {
+	s = s.replace(/-/g, '+').replace(/_/g, '/')
+	s += '='.repeat((4 - (s.length % 4)) % 4)
+	const bin = atob(s)
+	const a = new Uint8Array(bin.length)
+	for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i)
+	return a
+}
+const bytes2b = (bytes: Uint8Array) => {
+	let bin = ''
+	for (const b of bytes) bin += String.fromCharCode(b)
+	return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+const u8 = (s: string) => new TextEncoder().encode(s)
+const cat = (...arrs: Uint8Array[]) => {
+	const out = new Uint8Array(arrs.reduce((n, a) => n + a.length, 0))
+	let o = 0
+	for (const a of arrs) { out.set(a, o); o += a.length }
+	return out
+}
+async function hkdf(salt: Uint8Array, ikm: Uint8Array, info: Uint8Array, len: number) {
+	const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits'])
+	return new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, key, len * 8))
+}
+async function vapidHeader(endpoint: string, e: any) {
+	const aud = new URL(endpoint).origin
+	const header = bytes2b(u8(JSON.stringify({ typ: 'JWT', alg: 'ES256' })))
+	const payload = bytes2b(u8(JSON.stringify({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: e.VAPID_SUBJECT || 'mailto:roo26@alkem.dev' })))
+	const signingInput = `${header}.${payload}`
+	const pub = b2bytes(e.VAPID_PUBLIC)
+	const jwk = { kty: 'EC', crv: 'P-256', x: bytes2b(pub.slice(1, 33)), y: bytes2b(pub.slice(33, 65)), d: e.VAPID_PRIVATE, ext: true }
+	const key = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign'])
+	const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, u8(signingInput)))
+	return `vapid t=${signingInput}.${bytes2b(sig)}, k=${e.VAPID_PUBLIC}`
+}
+async function sendPush(sub: any, payload: object, e: any): Promise<'gone' | boolean> {
+	try {
+		const ua = b2bytes(sub.keys.p256dh)
+		const auth = b2bytes(sub.keys.auth)
+		const as = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])
+		const asPub = new Uint8Array(await crypto.subtle.exportKey('raw', as.publicKey))
+		const uaKey = await crypto.subtle.importKey('raw', ua, { name: 'ECDH', namedCurve: 'P-256' }, false, [])
+		const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, as.privateKey, 256))
+		const ikm = await hkdf(auth, shared, cat(u8('WebPush: info\0'), ua, asPub), 32)
+		const salt = crypto.getRandomValues(new Uint8Array(16))
+		const cek = await hkdf(salt, ikm, u8('Content-Encoding: aes128gcm\0'), 16)
+		const nonce = await hkdf(salt, ikm, u8('Content-Encoding: nonce\0'), 12)
+		const plaintext = cat(u8(JSON.stringify(payload)), new Uint8Array([2]))
+		const aesKey = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt'])
+		const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, aesKey, plaintext))
+		const body = cat(salt, new Uint8Array([0, 0, 0x10, 0]), new Uint8Array([65]), asPub, ct)
+		const res = await fetch(sub.endpoint, {
+			method: 'POST',
+			headers: { 'content-encoding': 'aes128gcm', 'content-type': 'application/octet-stream', ttl: '86400', authorization: await vapidHeader(sub.endpoint, e) },
+			body,
+		})
+		if (res.status === 404 || res.status === 410) return 'gone'
+		return res.ok
+	} catch {
+		return false
+	}
+}
+
+// fan a news/alert push out to subscribers. Targeted to people who starred the
+// affected set when the item carries a schedule change; otherwise broadcast.
+async function pushNews(env: any, item: any): Promise<number> {
+	const kv = env.PUSH_KV as KVNamespace | undefined
+	if (!kv || !env.VAPID_PRIVATE) return 0
+	const targetSet: string | null = item.change?.setId || null
+	const payload = {
+		title: item.severity === 'urgent' ? `🚨 ${item.title}` : `📣 ${item.title}`,
+		body: item.summary || '',
+		url: '/info',
+		tag: 'news-' + item.id,
+	}
+	let sent = 0
+	let cursor: string | undefined
+	do {
+		const list = await kv.list({ prefix: 'push:', cursor })
+		const jobs = list.keys.map(async (k) => {
+			const rec: any = await kv.get(k.name, 'json')
+			if (!rec?.sub) return
+			if (rec.prefs?.news === false) return
+			if (targetSet) {
+				const starred = (rec.stars || []).includes(targetSet) || (rec.reminders || []).some((r: any) => r.tag === 'set-' + targetSet)
+				if (!starred) return
+			}
+			const r = await sendPush(rec.sub, payload, env)
+			if (r === 'gone') await kv.delete(k.name)
+			else if (r) sent++
+		})
+		await Promise.allSettled(jobs)
+		cursor = list.list_complete ? undefined : list.cursor
+	} while (cursor)
+	return sent
+}
+
 export const ALL: APIRoute = async ({ request, params }) => {
 	const kv = (env as any).ROO_KV as KVNamespace | undefined
 	const path = params.path || ''
@@ -217,6 +318,84 @@ export const ALL: APIRoute = async ({ request, params }) => {
 		} catch (err: any) {
 			return json({ error: 'query failed', detail: String(err?.message || err) }, 500)
 		}
+	}
+
+	// ───────────────────────── news & alerts ─────────────────────────
+	// GET  /roo26-api/news  → public feed (cached briefly). The client renders the
+	//   Guide news strip + top banner + modal, and overlays any schedule `change`.
+	// POST /roo26-api/news  → publish/retract (gated by ADMIN_KEY). On publish it
+	//   appends the item and fires a Web Push (targeted to people who starred the
+	//   affected set if the item carries a schedule change, else broadcast).
+	if (path === 'news') {
+		const pkv = (env as any).PUSH_KV as KVNamespace | undefined
+		if (request.method === 'GET') {
+			const doc = (pkv && (await pkv.get('news:current', 'json'))) || { v: 1, items: [] }
+			return new Response(JSON.stringify(doc), {
+				headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=30' },
+			})
+		}
+		if (request.method === 'POST') {
+			const adminKey = (env as any).ADMIN_KEY as string | undefined
+			let body: any
+			try { body = await request.json() } catch { return json({ error: 'bad json' }, 400) }
+			const given = request.headers.get('x-admin-key') || body?.key
+			if (!adminKey || given !== adminKey) return json({ error: 'unauthorized' }, 401)
+			if (!pkv) return json({ error: 'PUSH_KV not bound' }, 503)
+
+			const doc: any = (await pkv.get('news:current', 'json')) || { v: 1, items: [] }
+
+			if (body.action === 'delete') {
+				doc.items = (doc.items || []).filter((x: any) => x.id !== body.id)
+				doc.updatedAt = Date.now()
+				await pkv.put('news:current', JSON.stringify(doc))
+				return json({ ok: true, removed: body.id })
+			}
+
+			const it = body.item || body
+			const clamp = (s: any, n: number) => String(s ?? '').slice(0, n)
+			const sev = ['info', 'alert', 'urgent'].includes(it.severity) ? it.severity : 'info'
+			if (!it.title) return json({ error: 'title required' }, 400)
+			const links = (Array.isArray(it.links) ? it.links : [])
+				.filter((l: any) => l && typeof l.url === 'string' && /^https?:\/\//.test(l.url))
+				.slice(0, 14)
+				.map((l: any) => ({ label: clamp(l.label || l.url, 80), url: clamp(l.url, 500), kind: ['official', 'press', 'social', 'source', 'other'].includes(l.kind) ? l.kind : 'source' }))
+			let change: any = undefined
+			if (it.change && ['time', 'stage', 'cancel', 'note', 'add'].includes(it.change.type)) {
+				const c = it.change
+				change = {
+					setId: clamp(c.setId, 80) || undefined,
+					type: c.type,
+					artist: c.artist ? clamp(c.artist, 80) : undefined,
+					day: c.day ? clamp(c.day, 8) : undefined,
+					stage: c.stage ? clamp(c.stage, 24) : undefined,
+					start: c.start ? clamp(c.start, 16) : undefined,
+					end: c.end ? clamp(c.end, 16) : undefined,
+					note: c.note ? clamp(c.note, 200) : undefined,
+				}
+			}
+			const item = {
+				id: clamp(it.id, 40) || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+				ts: Number(it.ts) || Date.now(),
+				createdAt: Date.now(),
+				severity: sev,
+				title: clamp(it.title, 120),
+				summary: clamp(it.summary || it.title, 200),
+				body: clamp(it.body, 4000),
+				links,
+				tags: (Array.isArray(it.tags) ? it.tags : []).slice(0, 8).map((t: any) => clamp(t, 24)),
+				change,
+				confidence: typeof it.confidence === 'number' ? Math.max(0, Math.min(1, it.confidence)) : undefined,
+				sources: it.sources ? clamp(it.sources, 200) : undefined,
+			}
+			doc.items = [item, ...(doc.items || []).filter((x: any) => x.id !== item.id)].slice(0, 60)
+			doc.updatedAt = Date.now()
+			await pkv.put('news:current', JSON.stringify(doc))
+
+			let pushed = 0
+			if (body.notify !== false && sev !== 'silent') pushed = await pushNews(env, item)
+			return json({ ok: true, id: item.id, pushed })
+		}
+		return json({ error: 'method' }, 405)
 	}
 
 	if (!kv) return json({ error: 'crew backend not configured' }, 503)
