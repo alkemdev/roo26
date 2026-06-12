@@ -491,6 +491,21 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 			</div>
 		</div>
 
+		<!-- food vendor directory (opened from the map's 🍔 Food chip) -->
+		<div class="sheet-wrap" id="foodWrap" hidden>
+			<div class="sheet help-sheet food-sheet">
+				<div class="sheet-body">
+					<div class="help-head">
+						<h3>🍔 Food vendors</h3>
+						<button class="sheet-close static" id="foodClose" aria-label="Close">✕</button>
+					</div>
+					<input id="foodSearch" class="food-search" type="search" placeholder="Search vendors or cuisine…" autocomplete="off" />
+					<div id="foodList" class="food-list"></div>
+					<p class="food-note">Bonnaroo doesn't publish exact vendor spots — most are in the Centeroo food areas, with more at each campground Plaza. Toggle 🍕 on the map for the general food zones.</p>
+				</div>
+			</div>
+		</div>
+
 		<!-- first-run welcome / setup — advertises the opt-in features -->
 		<div class="sheet-wrap" id="welcomeWrap" hidden>
 			<div class="sheet pin-sheet welcome-sheet">
@@ -2385,6 +2400,53 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	.help-list b {
 		color: var(--txt);
 	}
+	/* ── food vendor directory ── */
+	.food-search {
+		width: 100%;
+		padding: 0.6rem 0.8rem;
+		margin-bottom: 0.7rem;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		border-radius: 12px;
+		color: var(--txt);
+		font-size: 0.92rem;
+	}
+	.food-list {
+		max-height: 56vh;
+		overflow-y: auto;
+	}
+	.food-group-h {
+		position: sticky;
+		top: 0;
+		background: var(--bg-2, #1a1430);
+		padding: 0.45rem 0.1rem 0.3rem;
+		font-size: 0.82rem;
+		font-weight: 700;
+		color: #c9b8ff;
+	}
+	.food-group-h span {
+		color: var(--mut);
+		font-weight: 500;
+	}
+	.food-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.42rem 0.1rem;
+		border-bottom: 1px solid var(--line);
+		font-size: 0.88rem;
+	}
+	.food-item .fi-emoji {
+		flex: 0 0 1.3rem;
+		text-align: center;
+	}
+	.food-note {
+		margin: 0.7rem 0 0;
+		font-size: 0.76rem;
+		color: var(--mut);
+		line-height: 1.4;
+	}
+
 	/* ── first-run welcome / setup ── */
 	.welcome-hero {
 		text-align: center;

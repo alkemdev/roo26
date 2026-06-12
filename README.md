@@ -22,7 +22,7 @@ npm run preview
 |---|---|
 | `src/pages/roo26/_App.astro` | The entire UI: HTML shell, markup, CSS. Props `tab` + `standalone`. |
 | `src/pages/roo26/_app.js` | All client logic: router, schedule, map, planner, passive 🐾 Tracks logging, weather, share/QR/ICS, crew client. |
-| `src/pages/roo26/_data/*.json` | `schedule.json` (154 sets), `pois.json` (49 map POIs), `artists.json` (115 artists). |
+| `src/pages/roo26/_data/*.json` | `schedule.json` (154 sets), `pois.json` (59 map POIs incl. bars), `artists.json` (115 artists), `food.json` (71 food vendors, browsable directory). |
 | `src-roo26/pages/{index,map,plan,info}.astro` | Root-path route wrappers — each renders `<App tab="…" standalone />`. |
 | `public/roo26-*` | Service worker, web manifests, icons, official festival maps. Filenames are referenced by absolute path in code — do not rename. |
 | `public/_headers` | Edge headers (immutable caching for `/_astro/*`, no-cache SW, baseline security). Honored by Workers Static Assets. |

@@ -1,0 +1,15 @@
+{
+  "source": "bonnaroo.com/food-vendors (official 2026 lineup, 71 vendors). Per-vendor on-site spots aren't published, so these are listed by cuisine, not pinned.",
+  "groups": [
+    { "emoji": "🍕", "name": "Pizza & Italian", "items": ["Spicy Pie", "Homeslice Pizzeria", "Pizza Nova", "Prince St. Pizza", "Rolling Oven", "Sawce Pizza", "Twisted Pasta"] },
+    { "emoji": "🥡", "name": "Asian", "items": ["Asian Sensation", "Island Noodles", "Bun'd Up", "Flaming Wok", "Fly Rice", "Grateful Gyoza", "Japanese Flair Hibachi Grill", "Ugadi Indian Grill"] },
+    { "emoji": "🍔", "name": "American, Burgers & BBQ", "items": ["100% Grassfed", "2Sisters Foods", "Brick Haus", "Bulldog Burgery", "Cheese Street", "Chicken Mac Truck", "Daddy's Dogs", "Get BAKED Stuffed Pretzel Rolls", "Gus's Fried Chicken", "Hebros Tenders & Cheesesteaks", "Hippie Dips", "Jalapeño Corndog Concessions", "Mac n' Me", "Meltdown Gourmet", "Pho Cue Vietnamese & Barbecue", "Roti Rolls", "SmashCity SmashBurgers", "Smash & Grab", "Southern Specialties", "The Corndog Company", "La Palapa", "Tica's Cantina"] },
+    { "emoji": "🌮", "name": "Mexican", "items": ["Captain Muchacho's Food Truck", "Fistful of Tacos", "Outback Kates", "Peace Love Quesadillas", "Tacos Before Vatos"] },
+    { "emoji": "🦞", "name": "Seafood, Cajun & Caribbean", "items": ["Down n the Bayou", "Kokomo Joes", "Lobster Rolls & More", "Twisted Lobster", "Phat Daddy's Creole", "Pie Daddy / Island Rice Bowls", "The Inka Trailer", "Pierogi Posse"] },
+    { "emoji": "🥙", "name": "Mediterranean", "items": ["Hebros Gyros, Tenders & more", "Hebros Kitchen", "Steak Boys Inc", "Strawberry Fields"] },
+    { "emoji": "🥗", "name": "Vegetarian & vegan", "items": ["Broccoli Bar", "Coconut Bowl and Grill", "NashBowls Açaí"] },
+    { "emoji": "🍦", "name": "Sweets & ice cream", "items": ["Ben & Jerry's", "Ice Box Brand Ice Cream Bars", "King of Pops Carts", "Kona Ice"] },
+    { "emoji": "☕", "name": "Coffee & café", "items": ["931 Bistro", "Bean Loft Coffee", "Cafe Racer Food Truck", "Just Squeezed", "The Loving Cup", "Travelin Toms Coffee"] },
+    { "emoji": "🥤", "name": "Drinks & juice", "items": ["Coco Bongos", "Little Coffee Joint", "Space Fruit", "Strawberry Fields Carts"] }
+  ]
+}

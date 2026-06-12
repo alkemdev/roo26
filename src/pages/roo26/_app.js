@@ -3,6 +3,7 @@
 import SCHED from './_data/schedule.json'
 import POIS from './_data/pois.json'
 import ARTISTS from './_data/artists.json'
+import FOOD from './_data/food.json'
 
 const TZ = SCHED.tz || '-05:00' // Central Daylight Time on the Farm
 
@@ -70,6 +71,7 @@ function toast(msg) {
 
 // ───────────────────────── data prep ─────────────────────────
 const STAGES = Object.fromEntries(SCHED.stages.map((s) => [s.id, s]))
+const FOOD_COUNT = FOOD.groups.reduce((n, g) => n + g.items.length, 0) // total vendors
 // The six main stages are Centeroo; everything else — all the Plaza stages
 // (When/Silent Disco/Groop/Why/Grove…) and Snake & Jake's — is Outeroo. New
 // stages need no edit here: anything not in this set defaults to Outeroo.
@@ -1500,6 +1502,10 @@ function renderPoiChips() {
 		renderPoiChips()
 		tev('tracks_toggle', { on: tracksOn, points: track.length })
 	})
+	// opens the searchable food-vendor directory (vendors aren't map-pinnable —
+	// Bonnaroo doesn't publish per-vendor spots — so this is a browsable list)
+	const foodListChip = el('button', { class: 'chip', style: '--chip-c:#3ddc97' }, `🍔 Food (${FOOD_COUNT})`)
+	foodListChip.addEventListener('click', openFood)
 	const extraChips = []
 	if (crewAvailable) {
 		const c = el(
@@ -1515,6 +1521,7 @@ function renderPoiChips() {
 		radarChip,
 		routeChip,
 		tracksChip,
+		foodListChip,
 		...Object.entries(POI_CATS).map(([id, def]) => {
 			const c = el(
 				'button',
@@ -2805,6 +2812,46 @@ function initNews() {
 	setInterval(loadNews, 5 * 60e3)
 }
 
+// ───────────────────────── food vendor directory ─────────────────────────
+// 71 official 2026 vendors, browsable by cuisine + searchable. Bonnaroo doesn't
+// publish per-vendor locations, so this is a list (not map pins) — opened from
+// the map's 🍔 Food chip.
+function renderFoodList(q = '') {
+	const box = $('#foodList')
+	if (!box) return
+	const query = q.trim().toLowerCase()
+	const frag = document.createDocumentFragment()
+	let shown = 0
+	for (const g of FOOD.groups) {
+		const items = g.items.filter((it) => !query || it.toLowerCase().includes(query) || g.name.toLowerCase().includes(query))
+		if (!items.length) continue
+		frag.append(el('div', { class: 'food-group-h' }, `${g.emoji} ${g.name} `, el('span', {}, `· ${items.length}`)))
+		for (const it of items) {
+			frag.append(el('div', { class: 'food-item' }, el('span', { class: 'fi-emoji' }, g.emoji), el('span', {}, it)))
+			shown++
+		}
+	}
+	if (!shown) frag.append(el('p', { class: 'food-note' }, 'No vendors match — try another search.'))
+	box.replaceChildren(frag)
+}
+function openFood() {
+	renderFoodList($('#foodSearch')?.value || '')
+	$('#foodWrap').hidden = false
+	document.body.style.overflow = 'hidden'
+	tev('food_open', { count: FOOD_COUNT })
+}
+function closeFood() {
+	$('#foodWrap').hidden = true
+	document.body.style.overflow = ''
+}
+function initFood() {
+	$('#foodClose')?.addEventListener('click', closeFood)
+	$('#foodWrap')?.addEventListener('click', (e) => {
+		if (e.target.id === 'foodWrap') closeFood()
+	})
+	$('#foodSearch')?.addEventListener('input', (e) => renderFoodList(e.target.value))
+}
+
 // ───────────────────────── first-run welcome / setup ─────────────────────────
 // One-time onboarding that advertises the opt-in features in a value-first order:
 // build a plan (no permission) → reminders → location → install. Each permission
@@ -2948,6 +2995,7 @@ renderFavCount()
 setTab(state.tab, false)
 loadAlerts()
 initNews() // festival news + schedule-change overlay
+initFood() // food-vendor directory
 initWelcome() // first-run setup sheet
 checkImport()
 tsnap() // capture the user's current plan on load
