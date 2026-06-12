@@ -19,12 +19,13 @@
 	// PUSH_KV — push-notification subscriptions (/roo26-api/push). The roo-push
 	// cron Worker binds the SAME namespace id. (Add ROO_KV here too to enable
 	// crew location sharing.)
-	"kv_namespaces": [{ "binding": "PUSH_KV", "id": "3ccb401a78cf4c62b7db381fa09ce5c7" }],
+	"kv_namespaces": [{ "binding": "PUSH_KV", "id": "3ccb401a78cf4c62b7db381fa09ce5c7" }]
 
 	// ── Telemetry (/roo26-api/t + /roo26-api/stats) ──
-	// Analytics Engine needs NO pre-provisioning — the dataset is created on the
-	// first writeDataPoint, so this is live the moment it deploys.
-	"analytics_engine_datasets": [{ "binding": "ROO26_AE", "dataset": "roo26_events" }]
+	// Analytics Engine: the dataset is created on first writeDataPoint, BUT the
+	// account must have Analytics Engine enabled or the deploy fails. Re-enable
+	// this line once AE is turned on for the account:
+	// , "analytics_engine_datasets": [{ "binding": "ROO26_AE", "dataset": "roo26_events" }]
 
 	// D1 (durable event log + plan snapshots) and R2 (raw archive) need real
 	// resource IDs that must EXIST before they can be declared here, or the deploy
