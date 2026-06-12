@@ -194,55 +194,90 @@ async function syncSchedule(env: Env, force = false): Promise<number> {
 	}
 	if (!Array.isArray(tb)) return 0
 
-	// current feed → setId: {start,end,artist,day,stage}, only for sets we track
+	// current feed keyed by idol_event_uid (a stable per-set id — immune to the
+	// spelling differences that made name-matching unsafe). Tracked stages only.
 	const cur: Record<string, any> = {}
 	for (const e of tb) {
 		const fd = festDay(e.start_date || '', e.start_time || '')
 		const st = VENUE[e.venue_name]
-		if (!fd || !st) continue
-		const sid = `${fd}-${st}-${slugName(e.event_name)}`
-		if (!OUR.has(sid)) continue
-		cur[sid] = { start: e.start_time || '', end: e.end_time || '', artist: e.event_name, day: fd, stage: st }
+		if (!fd || !st || !e.idol_event_uid) continue
+		cur[e.idol_event_uid] = { name: e.event_name, day: fd, stage: st, start: e.start_time || '', end: e.end_time || '' }
 	}
-	const snap: Record<string, any> | null = await env.PUSH_KV.get('sched:snap', 'json')
-	await env.PUSH_KV.put('sched:snap', JSON.stringify(cur))
+	const snap: Record<string, any> | null = await env.PUSH_KV.get('sched:snap2', 'json')
+	await env.PUSH_KV.put('sched:snap2', JSON.stringify(cur))
 	if (!snap) return 0 // first run: establish baseline only
 
-	let applied = 0
-	for (const sid in cur) {
-		const c = cur[sid]
-		const p = snap[sid]
-		if (!p || !c.start || !p.start || c.start === p.start) continue
-		const art = titleCase(c.artist)
-		const item = {
-			id: `autosync-${sid}-${c.start.replace(':', '')}`,
-			ts: Date.now(),
-			severity: 'info',
-			title: `${art} moved to ${c.start}`,
-			summary: `${art} now starts ${c.start} (${cap(c.day)} ${cap(c.stage)}) — was ${p.start}.`,
-			body: `• New time: ${c.start} (was ${p.start}).\n• Auto-synced from the official Festiverse schedule.`,
-			confidence: 0.9,
-			sources: 'Official Festiverse schedule · auto-sync',
-			tags: [slugName(c.artist)],
-			change: {
-				type: 'time',
-				setId: sid,
-				artist: art,
-				day: c.day,
-				start: `${festDate(c.day, c.start)}T${c.start}`,
-				end: c.end ? `${festDate(c.day, c.end)}T${c.end}` : undefined,
-				note: 'Official time update',
-			},
-		}
+	const sidOf = (x: any) => `${x.day}-${x.stage}-${slugName(x.name)}` // → our set id
+	const post = async (item: any) => {
 		try {
 			await fetch('https://roo26.alkem.dev/roo26-api/news', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', 'x-admin-key': env.ADMIN_KEY },
+				headers: { 'content-type': 'application/json', 'x-admin-key': env.ADMIN_KEY! },
 				body: JSON.stringify({ notify: true, item }),
 			})
-			applied++
 		} catch {}
 	}
+	const base = { ts: Date.now(), confidence: 0.9, sources: 'Official Festiverse schedule · auto-sync' }
+	let applied = 0
+
+	// TIME + STAGE changes — same event id in both snapshots
+	for (const uid in cur) {
+		const c = cur[uid]
+		const p = snap[uid]
+		if (!p) continue
+		const art = titleCase(c.name)
+		if (c.start && p.start && c.start !== p.start) {
+			const sid = sidOf(c)
+			if (OUR.has(sid)) {
+				await post({ ...base, id: `autosync-time-${sid}-${c.start.replace(':', '')}`, severity: 'info',
+					title: `${art} moved to ${c.start}`,
+					summary: `${art} now starts ${c.start} (${cap(c.day)} ${cap(c.stage)}) — was ${p.start}.`,
+					body: `• New time: ${c.start} (was ${p.start}).\n• Auto-synced from the official Festiverse schedule.`,
+					tags: [slugName(c.name)],
+					change: { type: 'time', setId: sid, artist: art, day: c.day, start: `${festDate(c.day, c.start)}T${c.start}`,
+						end: c.end ? `${festDate(c.day, c.end)}T${c.end}` : undefined, note: 'Official time update' } })
+				applied++
+			}
+		}
+		if (c.stage !== p.stage) {
+			const sid = sidOf(p) // our set id encodes the prior stage
+			if (OUR.has(sid)) {
+				await post({ ...base, id: `autosync-stage-${sid}-${c.stage}`, severity: 'alert',
+					title: `${art} moved to the ${cap(c.stage)} stage`,
+					summary: `${art} (${cap(c.day)}) moved from ${cap(p.stage)} to ${cap(c.stage)}.`,
+					body: `• New stage: ${cap(c.stage)} (was ${cap(p.stage)}).\n• Auto-synced from the official Festiverse schedule.`,
+					tags: [slugName(c.name)],
+					change: { type: 'stage', setId: sid, artist: art, day: p.day, stage: c.stage, note: 'Official stage move' } })
+				applied++
+			}
+		}
+	}
+
+	// CANCELLATIONS — two-strike: a set must be gone for two consecutive syncs
+	// (~30 min) before we cancel, so a transient feed blip can't false-cancel.
+	const pend: Record<string, any> = (await env.PUSH_KV.get('sched:pending2', 'json')) || {}
+	const nextPend: Record<string, any> = {}
+	for (const uid in pend) {
+		if (cur[uid]) continue // reappeared → drop
+		const p = pend[uid]
+		if (OUR.has(p.sid)) {
+			await post({ ...base, id: `autosync-cancel-${p.sid}`, severity: 'alert', confidence: 0.85,
+				title: `${titleCase(p.name)} off the lineup`,
+				summary: `${titleCase(p.name)}'s ${cap(p.day)} ${cap(p.stage)} set is no longer on the official schedule.`,
+				body: `• ${titleCase(p.name)}'s ${cap(p.day)} ${cap(p.stage)} set is no longer listed.\n• Dropped from the official Festiverse schedule.`,
+				tags: [slugName(p.name), 'cancelled'],
+				change: { type: 'cancel', setId: p.sid, artist: titleCase(p.name), day: p.day, note: 'No longer on the official schedule' } })
+			applied++
+		}
+	}
+	for (const uid in snap) {
+		if (cur[uid] || pend[uid]) continue // first strike: just disappeared → wait one cycle
+		const p = snap[uid]
+		const sid = sidOf(p)
+		if (OUR.has(sid)) nextPend[uid] = { sid, name: p.name, day: p.day, stage: p.stage }
+	}
+	await env.PUSH_KV.put('sched:pending2', JSON.stringify(nextPend))
+
 	return applied
 }
 
