@@ -1314,19 +1314,22 @@ $('#icsPlan').addEventListener('click', () => {
 })
 
 // ───────────────────────── map ─────────────────────────
+// Map filter groups. Markers are bucketed by their `grp` (falling back to `cat`),
+// so a chip can cover several POI cats (e.g. Essentials = water + medical + restrooms).
 const POI_CATS = {
-	// the one always-on orientation layer (no chip — the map is about the stages)
+	// always-on orientation layers (no chip — these anchor the map)
 	stage: { label: 'Stages', emoji: '🎪', color: '#ff4f7b', on: true, always: true },
-	// default-on safety layers
-	water: { label: 'Water', emoji: '💧', color: '#46b3ff', on: true },
-	medical: { label: 'Medical', emoji: '⛑️', color: '#ff5252', on: true },
-	// opt-in "find a thing" filters (off by default — keep the map sparse)
+	plaza: { label: 'Plazas', emoji: '⛺', color: '#b08bff', on: true, always: true },
+	// opt-in filters (off by default — keep the map sparse)
 	food: { label: 'Food & drinks', emoji: '🍔', color: '#3ddc97', on: false },
-	utility: { label: 'Restrooms', emoji: '🚻', color: '#8fa3ad', on: false },
-	camping: { label: 'Camping', emoji: '⛺', color: '#b08bff', on: false },
+	services: { label: 'Water · aid · WC', emoji: '🚰', color: '#46b3ff', on: false },
+	camp: { label: 'Extra camps', emoji: '🏕️', color: '#9b7bff', on: false },
 	landmark: { label: 'Landmarks', emoji: '🎡', color: '#ff8bd2', on: false },
 	entrance: { label: 'Entrances', emoji: '🚪', color: '#ffb02e', on: false },
 }
+// POI cat → filter group (cats not listed group under their own name)
+const POI_GRP = { water: 'services', medical: 'services', utility: 'services' }
+const poiGrp = (p) => p.grp || POI_GRP[p.cat] || p.cat
 
 let L = null // leaflet module, loaded lazily on first map view
 let map = null
@@ -1379,7 +1382,8 @@ async function initMap() {
 	// build category layers + markers
 	for (const cat of Object.keys(POI_CATS)) catLayers[cat] = L.layerGroup()
 	for (const p of POIS.pois) {
-		const cat = POI_CATS[p.cat] || POI_CATS.landmark
+		const grp = poiGrp(p)
+		const cat = POI_CATS[grp] || POI_CATS.landmark
 		const isStage = p.cat === 'stage'
 		const stageColor = p.stage && STAGES[p.stage] ? STAGES[p.stage].color : cat.color
 		const size = isStage ? 34 : 26
@@ -1399,7 +1403,7 @@ async function initMap() {
 			className: 'poi-lbl' + (majorLabel ? '' : ' lbl-minor'),
 		})
 		m.bindPopup(() => poiPopup(p))
-		m.addTo(catLayers[p.cat] ? catLayers[p.cat] : catLayers.landmark)
+		m.addTo(catLayers[grp] ? catLayers[grp] : catLayers.landmark)
 		if (isStage) stageMarkers[p.stage] = m
 	}
 	for (const [cat, def] of Object.entries(POI_CATS)) if (def.on) catLayers[cat].addTo(map)
@@ -1476,7 +1480,7 @@ function refreshNowPlaying() {
 // SETS, so overrides apply), and a "Guide me" button that aims the compass here.
 // Tapping an act opens the same artist sheet as the schedule view.
 function poiPopup(p) {
-	const emoji = p.emoji || POI_CATS[p.cat]?.emoji || '📍'
+	const emoji = p.emoji || POI_CATS[poiGrp(p)]?.emoji || '📍'
 	const wrap = el('div', {}, el('b', {}, p.name))
 	if (p.desc) wrap.append(el('div', { class: 'pop-desc' }, p.desc))
 	if (p.cat === 'stage' && p.stage) {
@@ -2126,7 +2130,7 @@ function renderNearest() {
 			const row = el(
 				'div',
 				{ class: 'near-row', role: 'button', tabindex: '0' },
-				el('span', { class: 'near-ico' }, r.emoji || POI_CATS[r.cat]?.emoji || '📍'),
+				el('span', { class: 'near-ico' }, r.emoji || POI_CATS[poiGrp(r)]?.emoji || '📍'),
 				el('span', { class: 'near-name' }, r.name),
 				el('span', { class: 'near-dist' }, fmtDist(r.dist)),
 				el('span', { class: 'near-walk' }, fmtWalk(r.dist)),
@@ -2156,7 +2160,7 @@ function focusPlace(t) {
 		zIndexOffset: 1600,
 		icon: L.divIcon({
 			className: '',
-			html: `<div class="focus-ping">${t.emoji || POI_CATS[t.cat]?.emoji || '📍'}</div>`,
+			html: `<div class="focus-ping">${t.emoji || POI_CATS[poiGrp(t)]?.emoji || '📍'}</div>`,
 			iconSize: [38, 38],
 			iconAnchor: [19, 34],
 		}),
