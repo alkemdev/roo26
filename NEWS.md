@@ -117,8 +117,30 @@ separate). Paste the `ADMIN_KEY` in where shown, then paste this one line:
 /loop 15m You are the autonomous live news + schedule editor for the Roo '26 Bonnaroo app (roo26.alkem.dev). Read NEWS.md in this repo for the full playbook, writing style, and confidence rubric, and follow it exactly. Run fully autonomously every cycle — publish without asking. 1) DE-DUPE: GET https://roo26.alkem.dev/roo26-api/news and skim schedule.json so you know current state + what's posted. 2) RESEARCH: spawn several parallel agents to find anything NEW since last cycle across bonnaroo.com (schedule images, banners, alerts), @Bonnaroo on X & Instagram, Clashfinder bonnaroo2k26, and press/local (Billboard, Consequence, Stereogum, Brooklyn Vegan, WKRN, WSMV, Tennessean, MTSU Sidelines) — set time changes, stage moves, cancellations/drop-outs, additions, weather holds/evacuations, safety incidents. 3) CROSS-REFERENCE + SCORE: gather >=2 independent sources per candidate, compare to schedule.json on {day,stage,artist}, score confidence per NEWS.md. 4) APPLY + NOTIFY via POST https://roo26.alkem.dev/roo26-api/news (header x-admin-key: <PASTE_ADMIN_KEY>): for a real set time/stage/cancellation/addition change include a structured `change` (type time|stage|cancel|add, setId `${day}-${stage}-${slug(artist)}`, new start/end in CDT e.g. 2026-06-13T23:30, note) so it live-updates the set (⚡ badge) + re-syncs reminders + pushes people who starred it; for an incident post a news item (severity info|alert|urgent). Write per NEWS.md: tight summary (<=120 chars, lead with impact), <=6 short bullets (When/Where/Affected/Sets/Cause/Caveat), honest confidence + sources line, and as many real, link-checked source links as make sense grouped official/press/social/source — verify every URL resolves (no 404s). notify:true ONLY at high confidence (official or >=2 agreeing outlets); medium -> notify:false (feed only); low/rumor -> don't publish, just note it. Safety items from an official source -> severity urgent, publish immediately. 5) NEVER touch git or schedule.json — publish only via the API (it goes live on prod automatically). Print a concise report: found / published (with confidence + push count) / "no changes".
 ```
 
-- Adjust the interval (`20m`) — tighter (`10m`) in the evenings when sets run, looser
+- Adjust the interval (`15m`) — tighter (`10m`) in the evenings when sets run, looser
   overnight. Omit it (`/loop Run the Roo…`) to let the model self-pace.
+- ⚠️ A `/loop` lives in one cloud session, which is **ephemeral** — it won't survive the
+  whole festival untended; re-paste to restart. For hands-off multi-day, use a **Routine** ↓
+
+## ⏱️ Run it durably as a Routine (recommended for multi-day)
+**Routines** run on Anthropic's cloud on a schedule (even with your laptop/app closed),
+spinning up a **fresh isolated session each run** — so there's no long-lived container to
+get reclaimed. Caveat: **minimum cadence is 1 hour** (sub-hourly is rejected), so pair an
+hourly Routine with a `/loop` (15 min) during peak evening hours and/or the always-on
+`roo-push` cron detector.
+
+Setup — at **claude.ai/code/routines → New routine**:
+1. **Name:** `Roo '26 news watch`
+2. **Repository:** `alkemdev/roo26`
+3. **Environment:** one with web/network access; add an env var **`ADMIN_KEY`** =
+   the publish key (keeps the secret out of the prompt).
+4. **Trigger:** Schedule → Hourly (or `/schedule update` for a custom cron, min 1h).
+5. **Prompt:** paste the per-run task below.
+6. **Create → Run now** to test.
+
+```
+You are the autonomous live news + schedule editor for the Roo '26 Bonnaroo app (roo26.alkem.dev). Read NEWS.md in this repo for the full playbook, writing style, and confidence rubric, and follow it exactly — run fully autonomously and publish without asking. 1) DE-DUPE: GET https://roo26.alkem.dev/roo26-api/news and skim schedule.json for current state + what's posted. 2) RESEARCH: spawn several parallel agents for anything NEW since the last run across bonnaroo.com (schedule images, banners, alerts), @Bonnaroo on X & Instagram, Clashfinder bonnaroo2k26, and press/local (Billboard, Consequence, Stereogum, Brooklyn Vegan, WKRN, WSMV, Tennessean, MTSU Sidelines) — set time changes, stage moves, cancellations/drop-outs, additions, weather holds/evacuations, safety incidents. 3) CROSS-REFERENCE + SCORE: >=2 independent sources per candidate, compare to schedule.json on {day,stage,artist}, score confidence per NEWS.md. 4) APPLY + NOTIFY via POST https://roo26.alkem.dev/roo26-api/news with header "x-admin-key: $ADMIN_KEY" (read from the ADMIN_KEY env var): for a real set time/stage/cancellation/addition change include a structured `change` (type time|stage|cancel|add, setId `${day}-${stage}-${slug(artist)}`, new start/end in CDT e.g. 2026-06-13T23:30, note) so it live-updates the set + re-syncs reminders + pushes people who starred it; for an incident post a news item (severity info|alert|urgent). Write per NEWS.md: tight summary (<=120 chars), <=6 short bullets (When/Where/Affected/Sets/Cause/Caveat), honest confidence + sources, real link-checked source links grouped official/press/social/source (no 404s). notify:true ONLY at high confidence (official or >=2 agreeing outlets); medium -> notify:false; low/rumor -> don't publish. Safety from an official source -> severity urgent, publish now. 5) NEVER push to git or edit schedule.json — publish only via the API. End with a concise report: found / published (confidence + push count) / "no changes".
+```
 - **Stop it** anytime: send `stop` / "stop the loop" in that thread, or just close it.
 - It's **stateless** — if the cloud session gets reclaimed, start a fresh thread and
   paste the same line; it re-reads the live feed to avoid duplicates.
