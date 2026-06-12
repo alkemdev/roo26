@@ -43,6 +43,41 @@ the app (banner + Guide news strip + modal + targeted Web Push).
 - Retract: `POST` with `{ "action":"delete", "id":"<id>", "key":"<ADMIN_KEY>" }`.
 - Read feed: `GET /roo26-api/news` (public).
 
+## Writing guidelines (how an alert should read)
+Strike a balance: **short and scannable, but genuinely informative.** People read these
+on a phone, in a crowd, often in a hurry.
+
+- **Summary** (banner/strip): ≤ ~120 chars. Lead with the *what* + the *impact*. No hype,
+  no filler. e.g. _"Storms move in ~6 PM Sat — What/Which stages may pause; check back."_
+- **Body**: use **bullet points**, one fact each. The modal renders lines that start with
+  `• `, `- `, or `* ` as a bullet list (`▸`). Keep to **≤ 6 bullets**, short sentences.
+  Recommended order:
+  1. **When** — date + time (festival-local CDT), and whether it's resolved/ongoing.
+  2. **Where** — stage(s)/area affected.
+  3. **What's affected** — concretely.
+  4. **Impact on sets** — who's delayed/moved/cancelled and the new time if known.
+  5. **Cause / status** — only if known; say "unconfirmed" when it is.
+  6. **Caveat** — note single-sourced/provisional info honestly.
+- **Lead bullet = the single most important thing** someone needs to know.
+- **Always cite sources.** Add as many real `links` as make sense, grouped by `kind`
+  (`official` > `press` > `social` > `source`), plus a one-line `sources` attribution and
+  an honest `confidence`. Prefer official Bonnaroo + reputable press; mark rumors as such.
+- **Verify links resolve** (no 404s) before publishing — drop or replace dead URLs.
+- **Severity:** `info` = FYI, no schedule impact · `alert` = affects plans (delays/moves)
+  · `urgent` = safety/weather/evacuation (red banner, push immediately if credible).
+- If a set actually moved/cancelled, attach a `change` **and** state the new time in a bullet.
+- Tone: factual and calm. Frame for festival-goers (name the stage, the artist, the time).
+
+**Example body:**
+```
+• When: Thu Jun 11, ~8:30 PM CDT — power restored shortly after.
+• Where: Localized to The Farm (not a regional outage).
+• Affected: What Stage screens & lights, the Bonnaroo sign, Ferris wheel, some food vendors & restrooms.
+• Sets: Four Tet & Skrillex delayed ~30 min; resumed with Four Tet. No cancellations.
+• Cause: Unconfirmed (an attendee floated a blown transformer; no official word).
+• Note: Still single-sourced — treat specifics as provisional.
+```
+
 ## Autonomous research playbook (run by an AI agent, e.g. via `/loop`)
 On each cycle:
 1. **Detect.** Scan for new events since last run:

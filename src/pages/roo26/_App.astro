@@ -821,7 +821,26 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		font-size: 0.9rem;
 		line-height: 1.5;
 		color: #ece7fb;
-		white-space: pre-wrap;
+	}
+	.news-modal-body p {
+		margin: 0 0 0.6rem;
+	}
+	.news-body-list {
+		margin: 0 0 0.6rem;
+		padding-left: 0;
+		list-style: none;
+	}
+	.news-body-list li {
+		position: relative;
+		padding-left: 1.1rem;
+		margin-bottom: 0.4rem;
+	}
+	.news-body-list li::before {
+		content: '▸';
+		position: absolute;
+		left: 0;
+		color: #7c5cff;
+		font-weight: 700;
 	}
 	.news-modal-links {
 		margin-top: 0.9rem;

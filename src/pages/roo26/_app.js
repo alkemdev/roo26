@@ -2734,7 +2734,7 @@ function openNews(id) {
 		it.sources ? '· ' + it.sources : '',
 		it.confidence != null ? `· ${Math.round(it.confidence * 100)}% confidence` : '',
 	].filter(Boolean).join(' ')
-	$('#newsModalBody').textContent = it.body || it.summary || ''
+	renderNewsBody($('#newsModalBody'), it.body || it.summary || '')
 	const groups = { official: 'Official', press: 'Press', social: 'Social posts', source: 'Sources', other: 'More' }
 	const wrap = $('#newsModalLinks')
 	wrap.replaceChildren()
@@ -2755,6 +2755,27 @@ function openNews(id) {
 	document.body.style.overflow = 'hidden'
 	tev('news_open', { id, sev: it.severity })
 }
+// render an alert body: lines starting with "• " / "- " / "* " become a bullet
+// list; blank lines separate paragraphs. Keeps alerts scannable.
+function renderNewsBody(box, text) {
+	box.replaceChildren()
+	let list = null
+	for (const raw of String(text).split('\n')) {
+		const line = raw.trim()
+		const m = line.match(/^[•\-*]\s+(.*)$/)
+		if (m) {
+			if (!list) {
+				list = el('ul', { class: 'news-body-list' })
+				box.append(list)
+			}
+			list.append(el('li', {}, m[1]))
+		} else {
+			list = null
+			if (line) box.append(el('p', {}, line))
+		}
+	}
+}
+
 function closeNews() {
 	$('#newsWrap').hidden = true
 	document.body.style.overflow = ''
