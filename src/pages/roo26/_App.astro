@@ -453,6 +453,7 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 						<h3>How to Roo with this app 🌈</h3>
 						<button class="sheet-close static" id="helpClose" aria-label="Close">✕</button>
 					</div>
+					<button class="sheet-btn" id="reopenSetup" style="width:100%;margin-bottom:.6rem">👋 Re-open the setup guide</button>
 					<ul class="help-list">
 						<li><b>🎸 Schedule</b> — every Centeroo set with live <i>NOW</i> badges. Tap a set for the artist's photo, bio, socials, news and Spotify. Tap ☆ to save it to My Roo. Search looks at today first, then shows matches from other days below. Hit <b>Now</b> to jump to the current moment.</li>
 						<li><b>🗺️ Map</b> — satellite map of the Farm. 📍 live location + distance to every stage, water and medical (auto-reconnects when signal drops). ⛺ custom pins for camps and meetup spots. 🧭 a compass that points straight back to your camp at 2 AM. 📜 the official festival maps. Chips toggle 🌧️ live rain radar and ➤ your route — yellow arrows through today's ★ sets in order.</li>
@@ -486,6 +487,24 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 					<div class="sheet-actions">
 						<button class="sheet-btn" id="newsClose">Close</button>
 					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- first-run welcome / setup — advertises the opt-in features -->
+		<div class="sheet-wrap" id="welcomeWrap" hidden>
+			<div class="sheet pin-sheet welcome-sheet">
+				<div class="sheet-body">
+					<div class="welcome-hero">
+						<div class="welcome-emoji">🌈</div>
+						<h3>Welcome to Roo '26</h3>
+						<p class="welcome-sub">Your pocket guide to the Farm — a few taps and you're set.</p>
+					</div>
+					<div class="welcome-steps" id="welcomeSteps"></div>
+					<div class="sheet-actions">
+						<button class="sheet-btn sheet-primary" id="welcomeDone">Let's go 🎉</button>
+					</div>
+					<button class="welcome-skip" id="welcomeSkip">Skip for now</button>
 				</div>
 			</div>
 		</div>
@@ -2365,6 +2384,100 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	}
 	.help-list b {
 		color: var(--txt);
+	}
+	/* ── first-run welcome / setup ── */
+	.welcome-hero {
+		text-align: center;
+		margin-bottom: 1rem;
+	}
+	.welcome-emoji {
+		font-size: 2.6rem;
+		line-height: 1;
+		animation: welcomeBob 2.6s ease-in-out infinite;
+	}
+	@keyframes welcomeBob {
+		50% {
+			transform: translateY(-6px) rotate(-4deg);
+		}
+	}
+	.welcome-hero h3 {
+		margin: 0.5rem 0 0.2rem;
+		font-size: 1.3rem;
+	}
+	.welcome-sub {
+		color: var(--mut);
+		font-size: 0.86rem;
+		margin: 0;
+	}
+	.welcome-steps {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		margin-bottom: 0.6rem;
+	}
+	.wstep {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.65rem 0.7rem;
+		background: var(--bg-3);
+		border: 1px solid var(--line);
+		border-radius: 13px;
+		transition: border-color 0.25s;
+	}
+	.wstep.done {
+		border-color: var(--roo-green, #3ddc97);
+	}
+	.wicon {
+		flex: 0 0 2.3rem;
+		height: 2.3rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.3rem;
+		background: rgba(124, 92, 255, 0.14);
+		border-radius: 11px;
+	}
+	.wmain {
+		flex: 1;
+		min-width: 0;
+	}
+	.wtitle {
+		font-weight: 700;
+		font-size: 0.92rem;
+	}
+	.wdesc {
+		color: var(--mut);
+		font-size: 0.78rem;
+		line-height: 1.35;
+	}
+	.wbtn {
+		flex: 0 0 auto;
+		background: var(--roo-purple, #7c5cff);
+		color: #fff;
+		border: none;
+		border-radius: 99px;
+		padding: 0.4rem 0.85rem;
+		font-size: 0.8rem;
+		font-weight: 700;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.wbtn:disabled,
+	.wbtn.wbtn-on {
+		background: rgba(61, 220, 151, 0.18);
+		color: var(--roo-green, #3ddc97);
+		cursor: default;
+	}
+	.welcome-skip {
+		display: block;
+		margin: 0.4rem auto 0;
+		background: none;
+		border: none;
+		color: var(--mut);
+		font-size: 0.82rem;
+		text-decoration: underline;
+		cursor: pointer;
 	}
 	.help-install {
 		margin-top: 0.8rem;

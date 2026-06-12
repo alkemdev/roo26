@@ -2802,6 +2802,137 @@ function initNews() {
 	setInterval(loadNews, 5 * 60e3)
 }
 
+// ───────────────────────── first-run welcome / setup ─────────────────────────
+// One-time onboarding that advertises the opt-in features in a value-first order:
+// build a plan (no permission) → reminders → location → install. Each permission
+// ask is primed by the row copy and only fires the OS prompt on an explicit tap.
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent)
+
+async function enableNotifsWelcome() {
+	if (isIOS() && !isStandalone()) {
+		toast('Add Roo to your Home Screen first (see Install), then turn on 🔔')
+		return false
+	}
+	if (!pushAvailable || typeof Notification === 'undefined') {
+		toast('Notifications aren’t available here')
+		return false
+	}
+	if (Notification.permission !== 'granted') {
+		const r = await Notification.requestPermission()
+		if (r !== 'granted') {
+			toast('Allow notifications to get reminders')
+			return false
+		}
+	}
+	notif = { sets: true, weather: true, lead: notif.lead || 20, on: true }
+	store.set('notif', notif)
+	await syncPush()
+	tev('notif_set', { on: true, sets: true, weather: true, lead: notif.lead, src: 'welcome' })
+	toast('🔔 Reminders on')
+	return true
+}
+
+function enableLocateWelcome() {
+	if (!('geolocation' in navigator)) {
+		toast('No location support on this device')
+		return false
+	}
+	startLocate(false) // explicit enable → requests the OS geolocation prompt
+	tev('locate', { on: true, src: 'welcome' })
+	return true
+}
+
+function doInstallWelcome() {
+	if (deferredInstall) {
+		deferredInstall.prompt()
+		deferredInstall.userChoice.finally(() => {
+			deferredInstall = null
+		})
+		return true
+	}
+	if (isIOS() && !isStandalone()) {
+		toast('Tap Share ⎋ in Safari, then “Add to Home Screen”')
+		return false
+	}
+	toast('Already installed, or use your browser’s “Install app” menu')
+	return false
+}
+
+const WELCOME_STEPS = [
+	{ icon: '⭐', title: 'Build your plan', desc: 'Tap the ☆ on any artist to save it to your weekend.', act: 'plan', btn: 'Browse', done: () => Object.keys(state.favs).length > 0 },
+	{ icon: '🔔', title: 'Don’t miss a beat', desc: 'Reminders before your sets, plus weather & schedule-change alerts.', act: 'notif', btn: 'Turn on', done: () => notif.on === true },
+	{ icon: '📍', title: 'Find your way', desc: 'Live distance to every stage, find your crew, track your steps.', act: 'locate', btn: 'Turn on', done: () => state.locatePref === true },
+	{ icon: '📲', title: 'Add to home screen', desc: 'Full-screen, and works offline out on the Farm.', act: 'install', btn: 'Install', done: () => isStandalone() },
+]
+
+function renderWelcomeSteps() {
+	const box = $('#welcomeSteps')
+	if (!box) return
+	box.replaceChildren(
+		...WELCOME_STEPS.map((s) => {
+			const on = s.done()
+			const btn = el('button', { class: 'wbtn' + (on ? ' wbtn-on' : ''), 'data-act': s.act }, on ? '✓ On' : s.btn)
+			if (on && s.act !== 'plan') btn.disabled = true
+			btn.addEventListener('click', () => welcomeAction(s.act))
+			return el(
+				'div',
+				{ class: 'wstep' + (on ? ' done' : '') },
+				el('span', { class: 'wicon' }, s.icon),
+				el('div', { class: 'wmain' }, el('div', { class: 'wtitle' }, s.title), el('div', { class: 'wdesc' }, s.desc)),
+				btn,
+			)
+		}),
+	)
+}
+
+async function welcomeAction(act) {
+	if (act === 'plan') {
+		closeWelcome()
+		setTab('schedule')
+		toast('Tap a ☆ to add a set ⭐')
+		return
+	}
+	let ok = false
+	if (act === 'notif') ok = await enableNotifsWelcome()
+	else if (act === 'locate') ok = enableLocateWelcome()
+	else if (act === 'install') ok = doInstallWelcome()
+	if (ok) renderWelcomeSteps()
+}
+
+function openWelcome() {
+	renderWelcomeSteps()
+	$('#welcomeWrap').hidden = false
+	document.body.style.overflow = 'hidden'
+	tev('welcome_open', {})
+}
+function closeWelcome() {
+	$('#welcomeWrap').hidden = true
+	document.body.style.overflow = ''
+	store.set('seen_welcome', true)
+}
+
+function initWelcome() {
+	$('#welcomeDone')?.addEventListener('click', closeWelcome)
+	$('#welcomeSkip')?.addEventListener('click', () => {
+		tev('welcome_skip', {})
+		closeWelcome()
+	})
+	$('#welcomeWrap')?.addEventListener('click', (e) => {
+		if (e.target.id === 'welcomeWrap') closeWelcome()
+	})
+	$('#reopenSetup')?.addEventListener('click', () => {
+		$('#helpWrap').hidden = true
+		openWelcome()
+	})
+	if (!store.get('seen_welcome', false))
+		setTimeout(() => {
+			// don't barge in over a shared-plan import preview or any other open sheet
+			if ($('.sheet-wrap:not([hidden])')) return
+			openWelcome()
+		}, 800)
+}
+
 // ───────────────────────── boot ─────────────────────────
 initTelemetry() // session_start + auto-capture (first, so it leads the session)
 renderDayTabs()
@@ -2814,6 +2945,7 @@ renderFavCount()
 setTab(state.tab, false)
 loadAlerts()
 initNews() // festival news + schedule-change overlay
+initWelcome() // first-run setup sheet
 checkImport()
 tsnap() // capture the user's current plan on load
 window.addEventListener('hashchange', checkImport)
