@@ -1011,6 +1011,8 @@ $('#nameSave').addEventListener('click', () => {
 	store.set('myicon', myIcon)
 	$('#nameSheetWrap').hidden = true
 	renderNameChip()
+	tev('rename', {}) // (no PII in the event itself — the name rides the snapshot)
+	tsnap() // push the new name/icon to the analytics snapshot right away
 })
 $('#nameCancel').addEventListener('click', () => ($('#nameSheetWrap').hidden = true))
 $('#nameSheetWrap').addEventListener('click', (e) => {
