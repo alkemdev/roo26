@@ -212,9 +212,89 @@
       "name": "Bonnie Roo's Brews & Sports Bar",
       "lat": 35.4734,
       "lon": -86.05,
-      "cat": "food",
+      "cat": "bar",
       "emoji": "🍺",
-      "desc": "New for '26, in That Tent's old spot on the north edge (approx.)."
+      "desc": "New for '26 — Bavarian beer hall + sports bar with 10+ breweries & big screens, in That Tent's old spot on the north edge (approx.)."
+    },
+    {
+      "name": "Jack Daniel's Tennessee Whiskey",
+      "lat": 35.4733,
+      "lon": -86.0528,
+      "cat": "bar",
+      "emoji": "🥃",
+      "desc": "Whiskey cocktails + daily live DJ, over by The Other (approx.)."
+    },
+    {
+      "name": "Sierra Nevada Hazy Little Hideaway",
+      "lat": 35.472,
+      "lon": -86.0524,
+      "cat": "bar",
+      "emoji": "🍺",
+      "desc": "Hazy Little Thing IPA, shaded seating + free wifi. In Centeroo (exact spot approx.)."
+    },
+    {
+      "name": "Athletic Brewing Trailhead",
+      "lat": 35.4723,
+      "lon": -86.0509,
+      "cat": "bar",
+      "emoji": "🍺",
+      "desc": "Non-alcoholic craft beer samples. In Centeroo (exact spot approx.)."
+    },
+    {
+      "name": "Montucky YeeHaw Inn",
+      "lat": 35.471,
+      "lon": -86.0525,
+      "cat": "bar",
+      "emoji": "🍺",
+      "desc": "Cheap cold beer + a round of Drinko. In Centeroo (exact spot approx.)."
+    },
+    {
+      "name": "White Claw Shore Club",
+      "lat": 35.4717,
+      "lon": -86.0501,
+      "cat": "bar",
+      "emoji": "🍹",
+      "desc": "Hard seltzer bar. In Centeroo (exact spot approx.)."
+    },
+    {
+      "name": "Surfside",
+      "lat": 35.4706,
+      "lon": -86.0511,
+      "cat": "bar",
+      "emoji": "🍹",
+      "desc": "Canned vodka iced teas & lemonades. In Centeroo (exact spot approx.)."
+    },
+    {
+      "name": "That Tito's Thing",
+      "lat": 35.4713,
+      "lon": -86.0504,
+      "cat": "bar",
+      "emoji": "🍸",
+      "desc": "Tito's vodka cocktails under a copper disco ball, with seating. In Centeroo (exact spot approx.)."
+    },
+    {
+      "name": "Espolòn Tequila Mercado",
+      "lat": 35.4726,
+      "lon": -86.0517,
+      "cat": "bar",
+      "emoji": "🍸",
+      "desc": "Margaritas + tequila, merch & flash tattoos. In Centeroo (exact spot approx.)."
+    },
+    {
+      "name": "Cayman Club",
+      "lat": 35.472,
+      "lon": -86.0497,
+      "cat": "bar",
+      "emoji": "🍹",
+      "desc": "Island-themed margaritas & cocktails with photo ops. In Centeroo (exact spot approx.)."
+    },
+    {
+      "name": "Red Bull",
+      "lat": 35.4711,
+      "lon": -86.052,
+      "cat": "bar",
+      "emoji": "⚡",
+      "desc": "Energy drinks to get your wiiings. In Centeroo (exact spot approx.)."
     },
     {
       "name": "Restrooms — What Stage",

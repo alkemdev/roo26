@@ -1315,6 +1315,7 @@ const POI_CATS = {
 	medical: { label: 'Medical', emoji: '⛑️', color: '#ff5252', on: true },
 	entrance: { label: 'Entrances', emoji: '🚪', color: '#ffb02e', on: true },
 	food: { label: 'Food & shops', emoji: '🍕', color: '#3ddc97', on: false },
+	bar: { label: 'Bars & drinks', emoji: '🍺', color: '#f6c945', on: false },
 	utility: { label: 'Restrooms & misc', emoji: '🚻', color: '#8fa3ad', on: false },
 	camping: { label: 'Camping', emoji: '⛺', color: '#b08bff', on: true },
 	landmark: { label: 'Landmarks', emoji: '🎡', color: '#ff8bd2', on: true },
