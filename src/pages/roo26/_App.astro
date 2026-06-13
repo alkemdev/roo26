@@ -2001,8 +2001,9 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 		font-weight: 900;
 		text-align: center;
 	}
-	#qrCanvas {
-		width: min(78vw, 24rem) !important;
+	#qrCanvas,
+	#appQrCanvas {
+		width: min(72vw, 20rem) !important;
 		height: auto !important;
 		image-rendering: pixelated;
 	}
