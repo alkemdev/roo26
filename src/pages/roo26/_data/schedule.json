@@ -139,8 +139,8 @@
     { "a": "Camhoncho x C'est Funk", "s": "silent", "d": "fri", "t": "2026-06-12T22:00", "e": "2026-06-13T02:00" },
     { "a": "Motherborg", "s": "when", "d": "fri", "t": "2026-06-13T01:00", "e": "2026-06-13T05:00" },
     { "a": "From Dusk Til Dawn", "s": "when", "d": "sat", "t": "2026-06-14T01:00", "e": "2026-06-14T05:00" },
-    { "a": "Boytoy x Jiminy Kick-It", "s": "silent", "d": "sun", "t": "2026-06-15T02:00", "e": "2026-06-15T05:00" },
-    { "a": "From Dusk Til Dawn", "s": "when", "d": "sun", "t": "2026-06-15T01:00", "e": "2026-06-15T05:00" },
+    { "a": "Boytoy x Jiminy Kick-It", "s": "silent", "d": "sat", "t": "2026-06-14T02:00", "e": "2026-06-14T05:00" },
+    { "a": "Chore Boys x N*S*F*W", "s": "silent", "d": "sun", "t": "2026-06-14T10:00", "e": "2026-06-14T14:00" },
     { "a": "Tobacco Road", "s": "groop", "d": "thu", "t": "2026-06-11T11:30", "e": "2026-06-11T11:55" },
     { "a": "Allegory", "s": "groop", "d": "thu", "t": "2026-06-11T12:10", "e": "2026-06-11T12:35" },
     { "a": "Meadowglade", "s": "groop", "d": "thu", "t": "2026-06-11T12:50", "e": "2026-06-11T13:15" },
@@ -171,6 +171,7 @@
     { "a": "Billy!", "s": "groop", "d": "sat", "t": "2026-06-13T22:00", "e": "2026-06-13T22:45" },
     { "a": "Massie99", "s": "groop", "d": "sat", "t": "2026-06-13T23:00", "e": "2026-06-13T23:45" },
     { "a": "Emorcoo Afterdark", "s": "groop", "d": "sat", "t": "2026-06-14T01:00", "e": "2026-06-14T03:00" },
-    { "a": "Tiger City DJs", "s": "silent", "d": "sat", "t": "2026-06-13T10:00", "e": "2026-06-13T14:00" }
+    { "a": "Tiger City DJs", "s": "silent", "d": "sat", "t": "2026-06-13T10:00", "e": "2026-06-13T14:00" },
+    { "a": "Sana x Haoran Chen", "s": "silent", "d": "fri", "t": "2026-06-13T02:00", "e": "2026-06-13T05:00" }
   ]
 }
