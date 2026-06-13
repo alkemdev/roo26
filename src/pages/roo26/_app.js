@@ -1396,12 +1396,21 @@ async function initMap() {
 				iconAnchor: [size / 2, size / 2],
 			}),
 		})
-		const majorLabel = isStage || p.anchor || /^Plaza \d/.test(p.name) // key wayfinding anchors
+		// label tiers (see updateLabelZoom): stages + plazas + your pins stay labelled
+		// at every zoom; anchors and the toggled POIs only label once you zoom in (≥17)
+		// or tap — keeps the default view from drowning in overlapping names.
+		const tier = isStage
+			? 'lbl-stage'
+			: /^Plaza \d/.test(p.name)
+				? 'lbl-plaza'
+				: p.anchor
+					? 'lbl-anchor'
+					: 'lbl-poi lbl-minor'
 		m.bindTooltip(p.name, {
 			permanent: true,
 			direction: 'bottom',
 			offset: [0, size / 2 + 1],
-			className: 'poi-lbl' + (majorLabel ? '' : ' lbl-minor'),
+			className: 'poi-lbl ' + tier,
 		})
 		m.bindPopup(() => poiPopup(p))
 		// anchors render in the always-on layer and are excluded from their chip's layer
@@ -1411,6 +1420,8 @@ async function initMap() {
 	}
 	catLayers.anchor.addTo(map)
 	for (const [cat, def] of Object.entries(POI_CATS)) if (def.on) catLayers[cat].addTo(map)
+	map.on('zoomend', updateLabelZoom)
+	updateLabelZoom()
 
 	pinLayer = L.layerGroup().addTo(map)
 	routeLayer = L.layerGroup().addTo(map)
@@ -1448,6 +1459,14 @@ async function initMap() {
 
 // live stage labels — show what's playing NOW (and what's next) right on each
 // stage marker, with a pulse, so you can read the whole field at a glance.
+// Zoom-tiered labels: below zoom 17 we hide the secondary names (anchors + toggled
+// POIs) via a body class on the map container, so the default view stays readable.
+// Stages, plazas, your camp pins and live/your-set labels show at all zooms.
+function updateLabelZoom() {
+	if (!map) return
+	map.getContainer().classList.toggle('labels-zoomed', map.getZoom() >= 17)
+}
+
 function refreshNowPlaying() {
 	if (!map || !L) return
 	const now = Date.now()
@@ -2012,7 +2031,7 @@ function drawPins() {
 			permanent: true,
 			direction: 'bottom',
 			offset: [0, 8],
-			className: 'poi-lbl',
+			className: 'poi-lbl lbl-pin',
 		})
 		m.bindPopup(() => {
 			const move = el('button', { class: 'pop-btn' }, 'Move')

@@ -1779,8 +1779,20 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 	.poi-lbl::before {
 		display: none !important;
 	}
-	.map-zoomed-out .poi-lbl.lbl-minor {
+	/* Zoom-tiered labels: anchors (fountain, gates…) and toggled POIs (food/water…)
+	   stay icon-only until you zoom in (≥17) or tap — set by updateLabelZoom().
+	   Stages, plazas, your camp pins and live/your-set labels always show. */
+	.poi-lbl.lbl-anchor,
+	.poi-lbl.lbl-poi {
 		display: none;
+	}
+	.labels-zoomed .poi-lbl.lbl-anchor,
+	.labels-zoomed .poi-lbl.lbl-poi {
+		display: block;
+	}
+	.poi-lbl.lbl-poi {
+		opacity: 0.86;
+		font-weight: 600 !important;
 	}
 	/* live "now playing" stage labels */
 	.poi-lbl .npl-stage {
