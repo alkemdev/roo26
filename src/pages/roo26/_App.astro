@@ -55,6 +55,7 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 			</div>
 			<div class="topbar-right">
 				<div class="live-pill" id="livePill">…</div>
+				<button class="help-btn" id="shareBtn" aria-label="Share Roo '26">📲</button>
 				<button class="help-btn" id="notifBtn" aria-label="Notifications" hidden>🔔</button>
 				<button class="help-btn" id="helpBtn" aria-label="Help & install">?</button>
 			</div>
@@ -419,6 +420,18 @@ const ogImage = Astro.site ? new URL('/roo26-icon-512.png', Astro.site).href : '
 				<button class="share-opt" id="shareFull">📋 Share full schedule</button>
 			</div>
 			<button class="tool-btn qr-close" id="qrClose">Close</button>
+		</div>
+
+		<!-- share the app itself: fast scannable QR + native share + lineup card -->
+		<div class="qr-wrap" id="appShareWrap" hidden>
+			<div class="qr-name">Share Roo&nbsp;'26 🌈</div>
+			<canvas id="appQrCanvas"></canvas>
+			<div class="qr-hint">Point a friend's camera here — free, no signup</div>
+			<div class="qr-share-actions">
+				<button class="share-opt share-opt-primary" id="appShareLink">📲 Share the app</button>
+				<button class="share-opt" id="appShareCard">🎟️ Share my lineup</button>
+			</div>
+			<button class="tool-btn qr-close" id="appShareClose">Close</button>
 		</div>
 
 		<!-- take-me-home compass -->

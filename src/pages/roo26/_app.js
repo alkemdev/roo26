@@ -1074,6 +1074,196 @@ $('#qrClose').addEventListener('click', () => {
 	document.body.style.overflow = ''
 })
 
+// ── Share the APP itself (header 📲, on every screen): a fast scannable QR, a native
+//    share, and a "my lineup" story card — so word-of-mouth has zero friction ──
+const APP_URL = `${location.origin}${BASE}/`
+const APP_PITCH = "Roo '26 🌈 the unofficial Bonnaroo 2026 app — full set times, live map, plan-builder, crew finder & alerts. Free, no signup:"
+
+async function openAppShare() {
+	try {
+		const QR = (await import('qrcode')).default
+		await QR.toCanvas($('#appQrCanvas'), APP_URL, { width: 720, margin: 2, errorCorrectionLevel: 'M' })
+	} catch {} // QR is a bonus; the buttons still work without it
+	$('#appShareWrap').hidden = false
+	document.body.style.overflow = 'hidden'
+	tev('app_share_open', {})
+}
+function closeAppShare() {
+	$('#appShareWrap').hidden = true
+	document.body.style.overflow = ''
+}
+$('#shareBtn').addEventListener('click', openAppShare)
+$('#appShareClose').addEventListener('click', closeAppShare)
+$('#appShareWrap').addEventListener('click', (e) => { if (e.target.id === 'appShareWrap') closeAppShare() })
+
+async function shareApp() {
+	try {
+		if (navigator.share) await navigator.share({ title: "Roo '26", text: APP_PITCH, url: APP_URL })
+		else { await navigator.clipboard.writeText(`${APP_PITCH} ${APP_URL}`); toast('Link copied — paste it to your crew') }
+		questFlag('recruit')
+		tev('share', { kind: 'app' })
+	} catch {}
+}
+$('#appShareLink').addEventListener('click', shareApp)
+
+// "My lineup" story card — a shareable image of your starred sets with a scannable
+// QR baked in. People post their lineups anyway; this puts the app on every post.
+const DAY_LABEL = { thu: 'THURSDAY', fri: 'FRIDAY', sat: 'SATURDAY', sun: 'SUNDAY' }
+const DAY_ORDER = { thu: 0, fri: 1, sat: 2, sun: 3 }
+
+async function shareLineupCard() {
+	const favs = SETS.filter((s) => isFav(s.id) && s.startMs).sort((a, b) => a.startMs - b.startMs)
+	if (!favs.length) {
+		closeAppShare()
+		return toast('Star a few sets first — then your lineup card is ready ✨')
+	}
+	let blob
+	try {
+		blob = await buildLineupCard(favs)
+	} catch {
+		return toast('Could not build the card')
+	}
+	if (!blob) return
+	const file = new File([blob], 'my-roo26.png', { type: 'image/png' })
+	try {
+		if (navigator.canShare && navigator.canShare({ files: [file] })) {
+			await navigator.share({ files: [file], text: `My Roo '26 lineup 🌈 ${APP_URL}` })
+		} else {
+			const a = el('a', { href: URL.createObjectURL(blob), download: 'my-roo26.png' })
+			document.body.appendChild(a)
+			a.click()
+			a.remove()
+			toast('Saved your lineup card — post it & tag your crew!')
+		}
+		questFlag('recruit')
+		tev('share', { kind: 'lineup_card', sets: favs.length })
+	} catch {}
+}
+$('#appShareCard').addEventListener('click', shareLineupCard)
+
+function roundRect(c, X, Y, w, h, r) {
+	c.beginPath()
+	c.moveTo(X + r, Y)
+	c.arcTo(X + w, Y, X + w, Y + h, r)
+	c.arcTo(X + w, Y + h, X, Y + h, r)
+	c.arcTo(X, Y + h, X, Y, r)
+	c.arcTo(X, Y, X + w, Y, r)
+	c.closePath()
+}
+
+async function buildLineupCard(favs) {
+	const W = 1080, H = 1920, FOOT_Y = 1560
+	const cv = document.createElement('canvas')
+	cv.width = W
+	cv.height = H
+	const x = cv.getContext('2d')
+	// backdrop + festival glows
+	const g = x.createLinearGradient(0, 0, W, H)
+	g.addColorStop(0, '#1a0f36')
+	g.addColorStop(0.55, '#2a1850')
+	g.addColorStop(1, '#0b0716')
+	x.fillStyle = g
+	x.fillRect(0, 0, W, H)
+	const glow = (cx, cy, r, col) => {
+		const rg = x.createRadialGradient(cx, cy, 0, cx, cy, r)
+		rg.addColorStop(0, col)
+		rg.addColorStop(1, 'transparent')
+		x.fillStyle = rg
+		x.fillRect(0, 0, W, H)
+	}
+	glow(170, 240, 460, 'rgba(124,92,255,.55)')
+	glow(960, 520, 420, 'rgba(244,114,182,.40)')
+	glow(880, 1620, 520, 'rgba(61,220,151,.32)')
+
+	// header
+	x.textAlign = 'left'
+	const rainbow = x.createLinearGradient(80, 0, 780, 0)
+	const stops = ['#ff8fb1', '#ffd166', '#3ddc97', '#7c5cff', '#ff8fb1']
+	stops.forEach((c, i) => rainbow.addColorStop(i / (stops.length - 1), c))
+	x.fillStyle = rainbow
+	x.font = "900 92px system-ui, -apple-system, sans-serif"
+	x.fillText("MY ROO '26", 80, 190)
+	x.fillStyle = '#ece7fb'
+	x.font = '800 52px system-ui, sans-serif'
+	x.fillText(myDisplayName().slice(0, 22), 80, 268)
+	x.fillStyle = '#a99fd0'
+	x.font = '500 34px system-ui, sans-serif'
+	x.fillText('Bonnaroo 2026 · The Farm · Jun 11–14', 80, 322)
+	x.strokeStyle = 'rgba(255,255,255,.14)'
+	x.lineWidth = 2
+	x.beginPath()
+	x.moveTo(80, 366)
+	x.lineTo(W - 80, 366)
+	x.stroke()
+
+	// starred sets, grouped by day, capped to fit above the footer
+	let y = 452
+	let shown = 0
+	let capped = false
+	const days = [...new Set(favs.map((s) => s.day))].sort((a, b) => DAY_ORDER[a] - DAY_ORDER[b])
+	const MAX = 17
+	for (const d of days) {
+		if (shown >= MAX || y > FOOT_Y - 80) { capped = true; break }
+		x.fillStyle = '#ffd166'
+		x.font = '800 36px system-ui, sans-serif'
+		x.fillText(DAY_LABEL[d] || d.toUpperCase(), 80, y)
+		y += 58
+		let broke = false
+		for (const s of favs.filter((f) => f.day === d)) {
+			if (shown >= MAX || y > FOOT_Y - 36) { capped = true; broke = true; break }
+			x.fillStyle = '#3ddc97'
+			x.font = '700 33px system-ui, sans-serif'
+			x.fillText(fmtTime(s.start), 96, y)
+			x.fillStyle = '#ece7fb'
+			x.font = '600 38px system-ui, sans-serif'
+			let name = s.artist
+			const maxW = W - 250 - 230
+			while (x.measureText(name).width > maxW && name.length > 5) name = name.slice(0, -2)
+			if (name.length < s.artist.length) name = name.trimEnd() + '…'
+			x.fillText(name, 250, y)
+			x.fillStyle = '#9a8fc0'
+			x.font = '500 28px system-ui, sans-serif'
+			x.textAlign = 'right'
+			x.fillText(s.stage.short || s.stage.name, W - 80, y)
+			x.textAlign = 'left'
+			y += 54
+			shown++
+		}
+		if (broke) break
+		y += 18
+	}
+	const remaining = favs.length - shown
+	if (capped && remaining > 0) {
+		x.fillStyle = '#c9bdf0'
+		x.font = 'italic 600 32px system-ui, sans-serif'
+		x.fillText(`+ ${remaining} more in the app`, 96, Math.min(y + 6, FOOT_Y - 12))
+	}
+
+	// footer card: QR + URL
+	x.fillStyle = 'rgba(255,255,255,.06)'
+	roundRect(x, 60, FOOT_Y, W - 120, 284, 28)
+	x.fill()
+	try {
+		const QR = (await import('qrcode')).default
+		const data = await QR.toDataURL(APP_URL, { width: 320, margin: 1, color: { dark: '#160d2e', light: '#ffffff' } })
+		const img = new Image()
+		await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = data })
+		x.fillStyle = '#fff'
+		roundRect(x, 96, FOOT_Y + 38, 208, 208, 18)
+		x.fill()
+		x.drawImage(img, 110, FOOT_Y + 52, 180, 180)
+	} catch {}
+	x.fillStyle = '#fff'
+	x.font = '800 48px system-ui, sans-serif'
+	x.fillText('roo26.alkem.dev', 344, FOOT_Y + 118)
+	x.fillStyle = '#bcb0e6'
+	x.font = '500 33px system-ui, sans-serif'
+	x.fillText('Scan to get the app &', 344, FOOT_Y + 170)
+	x.fillText('build your own lineup 🌈', 344, FOOT_Y + 214)
+
+	return await new Promise((res) => cv.toBlob(res, 'image/png', 0.92))
+}
+
 // ───────────────────────── push notifications ─────────────────────────
 // Reminders for your starred sets (and severe-weather alerts) — fired by the
 // roo-push cron Worker so they land even with the app closed. Inert until the
@@ -1679,6 +1869,8 @@ async function crewTap() {
 	renderPoiChips()
 	tev('crew', { action: join.trim() ? 'join' : 'create' })
 	startCrew()
+	// network-effect nudge: a crew is useless until your people have the app too
+	if (!join.trim()) setTimeout(() => { toast("Now put your crew on Roo '26 so they can join 👇"); openAppShare() }, 600)
 }
 
 function startCrew() {
@@ -2689,6 +2881,7 @@ const QUESTS = [
 	{ id: 'star3', e: '⭐', t: 'Save 3 sets to your plan', auto: () => Object.keys(state.favs).length >= 3 },
 	{ id: 'camp', e: '⛺', t: 'Pin your camp on the map', auto: () => state.pins.length > 0 },
 	{ id: 'share', e: '📤', t: 'Share your plan with a friend' },
+	{ id: 'recruit', e: '📣', t: "Put a friend on Roo '26" },
 	{ id: 'omap', e: '📜', t: 'Peek at the official map' },
 	{ id: 'fountain', e: '⛲', t: 'Touch the mushroom Fountain', geo: () => FOUNTAIN, r: 75 },
 	{ id: 'water', e: '💧', t: 'Refill at a water station', cat: 'water', r: 65 },
