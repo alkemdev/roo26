@@ -235,17 +235,50 @@ async function syncSchedule(env: Env, force = false): Promise<number> {
 	if (!snap) return 0 // first run: establish baseline only
 
 	const sidOf = (x: any) => `${x.day}-${x.stage}-${slugName(x.name)}` // → our set id
-	const post = async (item: any) => {
+	const NEWS = 'https://roo26.alkem.dev/roo26-api/news'
+	const post = async (item: any, notify = true) => {
 		try {
-			await fetch('https://roo26.alkem.dev/roo26-api/news', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json', 'x-admin-key': env.ADMIN_KEY! },
-				body: JSON.stringify({ notify: true, item }),
-			})
+			await fetch(NEWS, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-key': env.ADMIN_KEY! },
+				body: JSON.stringify({ notify, item }) })
+		} catch {}
+	}
+	const del = async (id: string) => {
+		try {
+			await fetch(NEWS, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-key': env.ADMIN_KEY! },
+				body: JSON.stringify({ action: 'delete', id }) })
 		} catch {}
 	}
 	const base = { ts: Date.now(), confidence: 0.9, sources: 'Official Festiverse schedule · auto-sync' }
 	let applied = 0
+
+	// SELF-HEAL: a set we previously auto-cancelled that's back in the feed → retract the
+	// stale cancel and re-apply its current stage/time. Stops a dead "cancelled" from
+	// masking a later move (the Dora Jar bug), now autonomously, not just in the CLI tool.
+	const cancelled: Record<string, any> = (await env.PUSH_KV.get('sched:cancelled2', 'json')) || {}
+	for (const uid in cancelled) {
+		const c = cur[uid]
+		if (!c) continue // still gone → keep the cancel
+		const rec = cancelled[uid]
+		const art = titleCase(c.name)
+		await del(`autosync-cancel-${rec.sid}`)
+		if (c.stage !== rec.stage) {
+			await post({ ...base, id: `autosync-reappear-stage-${rec.sid}`, severity: 'alert',
+				title: `${art} is on — ${cap(c.stage)} stage`,
+				summary: `${art} is back on the official schedule (${cap(c.day)} ${cap(c.stage)}).`,
+				body: `• Listed again on the official Festiverse schedule.\n• Stage: ${cap(c.stage)}.`,
+				tags: [slugName(c.name)],
+				change: { type: 'stage', setId: rec.sid, artist: art, day: c.day, stage: c.stage, note: 'Back on the official schedule' } }, false)
+		}
+		await post({ ...base, id: `autosync-reappear-time-${rec.sid}`, severity: 'alert',
+			title: `${art} is on — ${cap(c.day)} ${c.start}`,
+			summary: `Good news: ${art} isn't cancelled — playing ${cap(c.day)} ${c.start} (${cap(c.stage)}).`,
+			body: `• ${art} is back on the official Festiverse schedule.\n• ${cap(c.day)} ${c.start}, ${cap(c.stage)} stage.`,
+			tags: [slugName(c.name)],
+			change: { type: 'time', setId: rec.sid, artist: art, day: c.day, start: `${festDate(c.day, c.start)}T${c.start}`,
+				end: c.end ? `${festDate(c.day, c.end)}T${c.end}` : undefined, note: 'Back on the official schedule' } })
+		delete cancelled[uid]
+		applied++
+	}
 
 	// TIME + STAGE changes — same event id in both snapshots
 	for (const uid in cur) {
@@ -294,9 +327,11 @@ async function syncSchedule(env: Env, force = false): Promise<number> {
 				body: `• ${titleCase(p.name)}'s ${cap(p.day)} ${cap(p.stage)} set is no longer listed.\n• Dropped from the official Festiverse schedule.`,
 				tags: [slugName(p.name), 'cancelled'],
 				change: { type: 'cancel', setId: p.sid, artist: titleCase(p.name), day: p.day, note: 'No longer on the official schedule' } })
+			cancelled[uid] = { sid: p.sid, name: p.name, day: p.day, stage: p.stage } // track for self-heal on reappearance
 			applied++
 		}
 	}
+	await env.PUSH_KV.put('sched:cancelled2', JSON.stringify(cancelled))
 	for (const uid in snap) {
 		if (cur[uid] || pend[uid]) continue // first strike: just disappeared → wait one cycle
 		const p = snap[uid]
