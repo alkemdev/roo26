@@ -2432,6 +2432,9 @@ async function openOmap(which = 'centeroo') {
 	try {
 		await loadLeaflet()
 	} catch {
+		// don't leave a blank, scroll-locked overlay if Leaflet can't load (offline)
+		$('#omapWrap').hidden = true
+		document.body.style.overflow = ''
 		toast('Could not load the viewer')
 		return
 	}
