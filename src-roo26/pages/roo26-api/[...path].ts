@@ -443,18 +443,20 @@ async function liveData(db: D1Database) {
 	const since5 = now - 5 * 60000
 	const since1 = now - 60000
 	const sinceHr = now - 60 * 60000
-	const [totals, active, perMin, recent, users, spark] = await Promise.all([
+	const [totals, active, perMin, recent, users, spark, errs] = await Promise.all([
 		q(`SELECT count(*) n, count(DISTINCT client_id) users, count(DISTINCT session_id) sessions FROM events`),
 		q(`SELECT count(DISTINCT client_id) n FROM events WHERE recv_ts > ${since5}`),
 		q(`SELECT count(*) n FROM events WHERE recv_ts > ${since1}`),
 		q(`SELECT recv_ts, event, client_id, route, country, city, device, props FROM events ORDER BY id DESC LIMIT 60`),
 		q(`SELECT client_id, max(recv_ts) last, count(*) events, max(device) device, max(country) country, max(city) city FROM events GROUP BY client_id ORDER BY last DESC LIMIT 30`),
 		q(`SELECT (recv_ts/60000) m, count(*) n FROM events WHERE recv_ts > ${sinceHr} GROUP BY m ORDER BY m`),
+		q(`SELECT count(*) n, count(DISTINCT client_id) devices FROM events WHERE event='error' AND recv_ts > ${sinceHr}`),
 	])
 	const t: any = totals[0] || {}
+	const e: any = errs[0] || {}
 	return {
 		now,
-		kpis: { events: t.n || 0, users: t.users || 0, sessions: t.sessions || 0, active5m: (active[0] as any)?.n || 0, perMin: (perMin[0] as any)?.n || 0 },
+		kpis: { events: t.n || 0, users: t.users || 0, sessions: t.sessions || 0, active5m: (active[0] as any)?.n || 0, perMin: (perMin[0] as any)?.n || 0, errors1h: e.n || 0, errDevices1h: e.devices || 0 },
 		recent,
 		users,
 		spark,
@@ -465,7 +467,9 @@ async function liveData(db: D1Database) {
 async function fullData(db: D1Database) {
 	const q = (sql: string) => db.prepare(sql).all().then((r) => r.results || [])
 	const live = await liveData(db)
-	const [byEvent, byHour, topArtists, topSearch, geo, devices, social, snaps] = await Promise.all([
+	const now = Date.now()
+	const since24 = now - 24 * 60 * 60000
+	const [byEvent, byHour, topArtists, topSearch, geo, devices, social, snaps, topErrors, recentErrors, errByVer, errTrend] = await Promise.all([
 		q(`SELECT event, count(*) n FROM events GROUP BY event ORDER BY n DESC LIMIT 40`),
 		q(`SELECT strftime('%m-%d %H:00', recv_ts/1000, 'unixepoch', '-5 hours') hour, count(*) n FROM events GROUP BY hour ORDER BY hour DESC LIMIT 48`),
 		q(`SELECT json_extract(props,'$.artist') artist, count(*) n FROM events WHERE event='fav' AND json_extract(props,'$.on')=1 GROUP BY artist ORDER BY n DESC LIMIT 30`),
@@ -474,8 +478,16 @@ async function fullData(db: D1Database) {
 		q(`SELECT device, count(DISTINCT client_id) users, count(*) n FROM events GROUP BY device ORDER BY n DESC`),
 		q(`SELECT json_extract(props,'$.from') from_name, count(*) n FROM events WHERE event='import_save' GROUP BY from_name ORDER BY n DESC LIMIT 30`),
 		q(`SELECT name, icon, fav_count, pins, friends, datetime(ts/1000,'unixepoch') updated FROM snapshots ORDER BY fav_count DESC LIMIT 50`),
+		// errors grouped by message (+ promise/runtime kind), most frequent first
+		q(`SELECT coalesce(json_extract(props,'$.msg'),'(no message)') msg, json_extract(props,'$.kind') kind, count(*) n, count(DISTINCT client_id) devices, max(recv_ts) last, max(json_extract(props,'$.src')) src, max(json_extract(props,'$.line')) line, max(route) route, max(app_ver) app_ver, max(device) device FROM events WHERE event='error' GROUP BY msg, kind ORDER BY n DESC LIMIT 25`),
+		// most recent individual errors
+		q(`SELECT recv_ts, props, route, app_ver, device, country, city, client_id FROM events WHERE event='error' ORDER BY id DESC LIMIT 40`),
+		// which app build is throwing
+		q(`SELECT coalesce(app_ver,'?') app_ver, count(*) n, count(DISTINCT client_id) devices FROM events WHERE event='error' GROUP BY app_ver ORDER BY n DESC LIMIT 10`),
+		// per-minute error trend, last hour
+		q(`SELECT (recv_ts/60000) m, count(*) n FROM events WHERE event='error' AND recv_ts > ${since24} GROUP BY m ORDER BY m`),
 	])
-	return { ...live, byEvent, byHour, topArtists, topSearch, geo, devices, social, snapshots: snaps }
+	return { ...live, byEvent, byHour, topArtists, topSearch, geo, devices, social, snapshots: snaps, topErrors, recentErrors, errByVer, errTrend }
 }
 
 // Client-rendered live dashboard. Reads ?key= from the URL and polls the JSON
@@ -513,8 +525,19 @@ h2{font-size:.95rem;margin:0 0 .75rem;color:#e7defc;font-weight:700}
 .vibe{font-size:1.02rem;line-height:1.65;color:#f5f1ff;font-weight:500}
 .vmeter{height:.5rem;border-radius:99px;background:#241c3b;overflow:hidden;margin-top:.8rem}
 .vfill{height:100%;border-radius:99px;background:linear-gradient(90deg,#3ddc97,#ffd166,#ff6b6b);transition:width .7s ease;width:0}
-.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:.8rem;margin-bottom:1.1rem}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:.8rem;margin-bottom:1.1rem}
 @media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi.err.bad{border-color:rgba(239,68,68,.5)}
+.kpi.err.bad::after{background:radial-gradient(140px 70px at 82% -12%,rgba(239,68,68,.45),transparent)}
+.kpi.err.bad .kn{background:linear-gradient(90deg,#ff8a8a,#ef4444);-webkit-background-clip:text;background-clip:text;color:transparent}
+.erow{display:flex;align-items:flex-start;gap:.6rem;padding:.45rem .5rem;border-radius:10px;border-left:3px solid #ef4444;background:rgba(239,68,68,.06);margin-bottom:.4rem}
+.erow .ecount{flex:0 0 auto;min-width:2.1rem;text-align:center;font-weight:800;font-variant-numeric:tabular-nums;color:#ff8a8a;background:rgba(239,68,68,.16);border-radius:8px;padding:.15rem .35rem;font-size:.82rem}
+.erow .emsg{flex:1;min-width:0}
+.erow .emsg b{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;color:#ffd9d9;font-weight:600;white-space:pre-wrap;word-break:break-word;line-height:1.35}
+.erow .emsg small{color:#9a8fc0;font-size:.7rem}
+.epill{display:inline-block;background:rgba(124,92,255,.18);border:1px solid #4a3a7a;border-radius:99px;padding:0 .4rem;margin:.18rem .25rem 0 0;font-size:.66rem;color:#cdbff0}
+h3{font-size:.78rem;color:#9a8fc0;margin:.9rem 0 .45rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.ok-msg{color:#7ff0e0;font-size:.86rem;display:flex;align-items:center;gap:.4rem}
 .kpi{position:relative;background:rgba(28,20,48,.6);border:1px solid rgba(124,92,255,.2);border-radius:16px;padding:.85rem 1rem;overflow:hidden;transition:transform .2s}
 .kpi:hover{transform:translateY(-3px)}
 .kpi::after{content:'';position:absolute;inset:0;background:radial-gradient(140px 70px at 82% -12%,rgba(124,92,255,.4),transparent);pointer-events:none}
@@ -568,8 +591,14 @@ small{color:#7a6fa0}
 <div class="kpi"><div class="kn" id="k_sessions" data-v="0">0</div><div class="kl">🪟 sessions</div></div>
 <div class="kpi hot"><div class="kn" id="k_active" data-v="0">0</div><div class="kl">🟢 active now (5m)</div></div>
 <div class="kpi hot"><div class="kn" id="k_min" data-v="0">0</div><div class="kl">🔥 events / last min</div></div>
+<div class="kpi err" id="kpi_err"><div class="kn" id="k_err" data-v="0">0</div><div class="kl">💥 errors / 1h</div></div>
 </div>
 <div class="panel"><h2>📈 Activity — last 60 minutes</h2><div id="chart"></div></div>
+<div class="panel"><h2>💥 Errors &amp; issues <span class="muted" id="errSummary"></span></h2>
+<div id="errTrend"></div>
+<div id="errTop"></div>
+<h3 id="errRecentLbl" style="display:none">most recent</h3><div class="feed" id="errFeed"></div>
+<div id="errByVer" class="muted" style="margin-top:.6rem"></div></div>
 <div class="cols">
 <div class="panel"><h2>⚡ Live event stream</h2><div class="feed" id="feed"></div></div>
 <div class="panel"><h2>👋 Who's here</h2><div id="users"></div></div>
@@ -610,7 +639,13 @@ function areaChart(box,rows){rows=rows||[];var n=rows.length,w=320,h=72;if(n<2){
 function hourly(rows){var hb=document.getElementById('hours');hb.replaceChildren();rows=(rows||[]).slice().reverse();var max=1;rows.forEach(function(x){max=Math.max(max,Number(x.n)||0);});rows.forEach(function(x){var v=Number(x.n)||0,b=el('i');if(v===max&&v>0)b.className='peak';b.style.height=(v/max*100)+'%';b.title=x.hour+' · '+v+' events';hb.append(b);});}
 function pushFeed(rows){var feed=document.getElementById('feed');rows=rows||[];for(var j=rows.length-1;j>=0;j--){var ev=rows[j],key=ev.recv_ts+'|'+ev.client_id+'|'+ev.event;if(seen[key])continue;seen[key]=1;var r=el('div','ev new');r.style.setProperty('--ec',COLOR[ev.event]||'#8a7fb0');r.append(el('span','eav',ICON[ev.event]||'•'));var mid=el('div','emid'),top=el('div','etop');top.append(el('span','et',ev.event.replace(/_/g,' ')));top.append(el('span','edet',detail(ev)));mid.append(top);mid.append(el('div','emeta',devEmoji(ev.device)+' '+flag(ev.country)+' '+(ev.city||'')+' · '+ago(ev.recv_ts)));r.append(mid);feed.prepend(r);}while(feed.childNodes.length>70)feed.removeChild(feed.lastChild);}
 function commentary(){var k=S.kpis||{},parts=[];var pm=k.perMin||0;var vibe=pm>=20?'🔥 The Farm is absolutely buzzing':pm>=8?'🎶 Nice steady flow on the app':pm>=1?'🌤️ Ticking along':'🌙 Pretty mellow right now';parts.push(vibe+' — '+pm+' event'+(pm===1?'':'s')+' in the last minute.');if(k.active5m)parts.push('👥 '+k.active5m+' device'+(k.active5m===1?'':'s')+' active in the last 5 min.');if(S.topArtists&&S.topArtists[0]&&S.topArtists[0].artist)parts.push('⭐ '+S.topArtists[0].artist+' is the crowd favorite.');if(S.devices&&S.devices[0])parts.push('📱 Most folks are on '+S.devices[0].device+'.');if(S.geo&&S.geo.length){var cities=S.geo.slice(0,3).map(function(g){return g.city;}).filter(Boolean);if(cities.length)parts.push('🌎 Tuning in from '+cities.join(', ')+(S.geo.length>3?' & more':'')+'.');}return parts.join('  ');}
-function render(full){var k=S.kpis||{};setK('k_events',k.events);setK('k_users',k.users);setK('k_sessions',k.sessions);setK('k_active',k.active5m);setK('k_min',k.perMin);document.getElementById('vfill').style.width=Math.min(100,(k.perMin||0)*3)+'%';document.getElementById('vibe').textContent=commentary();areaChart(document.getElementById('chart'),S.spark);pushFeed(S.recent);userChips(document.getElementById('users'),S.users);document.getElementById('updated').textContent='updated '+new Date(S.now||Date.now()).toLocaleTimeString();document.getElementById('liveTxt').textContent='LIVE';if(full){favBars(document.getElementById('artists'),S.topArtists);donut(document.getElementById('devices'),S.devices);tbl('searches',S.topSearch,[['q','query'],['hits','results'],['n','count']]);bars('social',S.social,'from_name');geoList(document.getElementById('geo'),S.geo);hourly(S.byHour);tbl('snaps',S.snapshots,[['name','name'],['icon','·'],['fav_count','★ sets'],['pins','pins'],['friends','friends'],['updated','updated']]);}}
+function mkpill(t){return el('span','epill',t);}
+function srcOf(s,line){if(!s)return '';return String(s).split('/').pop()+(line?':'+line:'');}
+function errTop(rows){var box=document.getElementById('errTop');box.replaceChildren();rows=rows||[];if(!rows.length){box.append(el('div','ok-msg','✅ No errors recorded — all clear.'));return;}rows.forEach(function(r){var row=el('div','erow');row.append(el('span','ecount',num(r.n)));var m=el('div','emsg');m.append(el('b',null,(r.kind==='promise'?'⚓ ':'')+(r.msg||'(no message)')));var s=srcOf(r.src,r.line);if(s)m.append(el('small',null,s));var pills=el('div');if(r.devices)pills.append(mkpill(num(r.devices)+(Number(r.devices)===1?' device':' devices')));if(r.app_ver)pills.append(mkpill('v'+r.app_ver));if(r.route)pills.append(mkpill(r.route));if(r.device)pills.append(mkpill(devEmoji(r.device)+' '+r.device));if(r.last)pills.append(mkpill('last '+ago(Number(r.last))+' ago'));m.append(pills);row.append(m);box.append(row);});}
+function errFeed(rows){var feed=document.getElementById('errFeed');feed.replaceChildren();rows=rows||[];document.getElementById('errRecentLbl').style.display=rows.length?'block':'none';rows.forEach(function(ev){var p=pj(ev.props);var r=el('div','ev');r.style.setProperty('--ec','#ef4444');r.append(el('span','eav','💥'));var mid=el('div','emid'),top=el('div','etop');top.append(el('span','edet',(p.kind==='promise'?'⚓ ':'')+(p.msg||'(no message)')));mid.append(top);var bits=[devEmoji(ev.device),flag(ev.country),(ev.city||''),(ev.app_ver?'v'+ev.app_ver:''),(ev.route||''),srcOf(p.src,p.line),ago(ev.recv_ts)+' ago'];mid.append(el('div','emeta',bits.filter(Boolean).join(' · ')));r.append(mid);feed.append(r);});}
+function errVer(rows){var box=document.getElementById('errByVer');rows=rows||[];box.textContent=rows.length?('by build — '+rows.map(function(r){return 'v'+r.app_ver+': '+num(r.n);}).join('  ·  ')):'';}
+function renderErrors(){var et=S.errTrend||[];var total24=0;et.forEach(function(x){total24+=Number(x.n)||0;});var e1h=(S.kpis||{}).errors1h||0;document.getElementById('errSummary').textContent=total24?('· '+num(total24)+' in 24h · '+num(e1h)+' in last hour'):'· all clear ✅';errTop(S.topErrors);errFeed(S.recentErrors);errVer(S.errByVer);var etb=document.getElementById('errTrend');if(et.length>=2){areaChart(etb,et);}else{etb.replaceChildren();}}
+function render(full){var k=S.kpis||{};setK('k_events',k.events);setK('k_users',k.users);setK('k_sessions',k.sessions);setK('k_active',k.active5m);setK('k_min',k.perMin);setK('k_err',k.errors1h);var ke=document.getElementById('kpi_err');if(ke)ke.classList.toggle('bad',(k.errors1h||0)>0);document.getElementById('vfill').style.width=Math.min(100,(k.perMin||0)*3)+'%';document.getElementById('vibe').textContent=commentary();areaChart(document.getElementById('chart'),S.spark);pushFeed(S.recent);userChips(document.getElementById('users'),S.users);document.getElementById('updated').textContent='updated '+new Date(S.now||Date.now()).toLocaleTimeString();document.getElementById('liveTxt').textContent='LIVE';if(full){favBars(document.getElementById('artists'),S.topArtists);donut(document.getElementById('devices'),S.devices);tbl('searches',S.topSearch,[['q','query'],['hits','results'],['n','count']]);bars('social',S.social,'from_name');geoList(document.getElementById('geo'),S.geo);hourly(S.byHour);tbl('snaps',S.snapshots,[['name','name'],['icon','·'],['fav_count','★ sets'],['pins','pins'],['friends','friends'],['updated','updated']]);renderErrors();}}
 async function tick(full){if(paused)return;try{var r=await fetch(BASE+'&format=json'+(full?'':'&mode=live'),{cache:'no-store'});if(r.status===401){document.getElementById('liveTxt').textContent='bad key 🔒';return;}var d=await r.json();for(var key in d)S[key]=d[key];render(full||!gotFull);if(full)gotFull=true;}catch(e){document.getElementById('liveTxt').textContent='reconnecting…';}}
 document.getElementById('pauseBtn').onclick=function(){paused=!paused;this.textContent=paused?'▶ Resume':'⏸ Pause';document.querySelector('.dot').style.animationPlayState=paused?'paused':'running';if(!paused)tick(true);};
 tick(true);
