@@ -1333,6 +1333,7 @@ const poiGrp = (p) => p.grp || POI_GRP[p.cat] || p.cat
 
 let L = null // leaflet module, loaded lazily on first map view
 let map = null
+let mapInit = null // in-flight init promise — guards against concurrent initMap() races
 const catLayers = {}
 const stageMarkers = {}
 let pinLayer = null
@@ -1348,14 +1349,26 @@ async function loadLeaflet() {
 	return L
 }
 
+// Public entry: idempotent + race-safe. initMap() is async (it awaits Leaflet),
+// so two quick calls (e.g. tapping the Map tab mid-load) used to both pass the
+// `if (map)` null-check and each run L.map('map') — the 2nd threw "Map container
+// is already initialized." We now memoize the in-flight promise so concurrent
+// callers join the same init instead of starting a second one.
 async function initMap() {
 	if (map) {
 		setTimeout(() => map.invalidateSize(), 60)
 		return
 	}
+	if (mapInit) return mapInit
+	mapInit = buildMap()
+	return mapInit
+}
+
+async function buildMap() {
 	try {
 		await loadLeaflet()
 	} catch {
+		mapInit = null // allow a later retry
 		toast('Map failed to load — check your connection')
 		return
 	}
@@ -1396,9 +1409,9 @@ async function initMap() {
 				iconAnchor: [size / 2, size / 2],
 			}),
 		})
-		// label tiers (see updateLabelZoom): stages + plazas + your pins stay labelled
-		// at every zoom; anchors and the toggled POIs only label once you zoom in (≥17)
-		// or tap — keeps the default view from drowning in overlapping names.
+		// label tiers (see .map-zoomed-out CSS): stages + plazas + your pins stay
+		// labelled at every zoom; anchors and toggled POIs only label once you zoom
+		// in (≥17) or tap — keeps the default view from drowning in overlapping names.
 		const tier = isStage
 			? 'lbl-stage'
 			: /^Plaza \d/.test(p.name)
@@ -1420,8 +1433,6 @@ async function initMap() {
 	}
 	catLayers.anchor.addTo(map)
 	for (const [cat, def] of Object.entries(POI_CATS)) if (def.on) catLayers[cat].addTo(map)
-	map.on('zoomend', updateLabelZoom)
-	updateLabelZoom()
 
 	pinLayer = L.layerGroup().addTo(map)
 	routeLayer = L.layerGroup().addTo(map)
@@ -1459,14 +1470,6 @@ async function initMap() {
 
 // live stage labels — show what's playing NOW (and what's next) right on each
 // stage marker, with a pulse, so you can read the whole field at a glance.
-// Zoom-tiered labels: below zoom 17 we hide the secondary names (anchors + toggled
-// POIs) via a body class on the map container, so the default view stays readable.
-// Stages, plazas, your camp pins and live/your-set labels show at all zooms.
-function updateLabelZoom() {
-	if (!map) return
-	map.getContainer().classList.toggle('labels-zoomed', map.getZoom() >= 17)
-}
-
 function refreshNowPlaying() {
 	if (!map || !L) return
 	const now = Date.now()
